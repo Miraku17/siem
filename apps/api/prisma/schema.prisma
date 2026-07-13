@@ -1,0 +1,146 @@
+// SIEM Platform — Prisma schema
+// docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── Enums ──────────────────────────────────────────────────
+
+enum Severity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ApplicationStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum AlertStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+  FALSE_POSITIVE
+}
+
+enum IncidentStatus {
+  OPEN
+  INVESTIGATING
+  CONTAINED
+  RESOLVED
+  CLOSED
+}
+
+enum IncidentPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum UserRole {
+  ADMIN
+  ANALYST
+  VIEWER
+}
+
+// Event types are stored as strings so applications can send new types
+// without a migration. See src/events/event-types.ts for the known catalog.
+
+// ── Models ─────────────────────────────────────────────────
+
+model Application {
+  id        String            @id @default(cuid())
+  name      String
+  slug      String            @unique // e.g. "velocity-pickleball"
+  apiKey    String            @unique
+  status    ApplicationStatus @default(ACTIVE)
+  createdAt DateTime          @default(now())
+
+  events SecurityEvent[]
+
+  @@map("applications")
+}
+
+model SecurityEvent {
+  id            String   @id @default(cuid())
+  applicationId String
+  eventType     String
+  severity      Severity @default(LOW)
+  userId        String?
+  email         String?
+  ipAddress     String?
+  endpoint      String?
+  method        String?
+  statusCode    Int?
+  userAgent     String?
+  timestamp     DateTime // when the event occurred (from the source app)
+  metadata      Json?
+  createdAt     DateTime @default(now()) // when the SIEM ingested it
+
+  application Application @relation(fields: [applicationId], references: [id])
+  alerts      Alert[]
+
+  @@index([applicationId, timestamp])
+  @@index([eventType, timestamp])
+  @@index([ipAddress])
+  @@index([userId])
+  @@index([email])
+  @@map("security_events")
+}
+
+model Alert {
+  id          String      @id @default(cuid())
+  title       String
+  severity    Severity
+  status      AlertStatus @default(OPEN)
+  description String?
+  ruleId      String? // which detection rule fired
+  eventId     String?
+  incidentId  String?
+  createdAt   DateTime    @default(now())
+
+  event    SecurityEvent? @relation(fields: [eventId], references: [id])
+  incident Incident?      @relation(fields: [incidentId], references: [id])
+
+  @@index([severity, status])
+  @@index([createdAt])
+  @@map("alerts")
+}
+
+model Incident {
+  id          String           @id @default(cuid())
+  title       String
+  description String?
+  status      IncidentStatus   @default(OPEN)
+  priority    IncidentPriority @default(MEDIUM)
+  assignedTo  String? // User id
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  assignee User?   @relation(fields: [assignedTo], references: [id])
+  alerts   Alert[]
+
+  @@index([status, priority])
+  @@map("incidents")
+}
+
+model User {
+  id        String     @id @default(cuid())
+  email     String     @unique
+  password  String // hashed
+  role      UserRole   @default(ANALYST)
+  createdAt DateTime   @default(now())
+
+  incidents Incident[]
+
+  @@map("users")
+}

@@ -1,0 +1,16 @@
+{
+  "name": "siem-platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Centralized SIEM platform (ingestion API + detection engine + SOC dashboard)",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "npm --workspace apps/api run start:dev",
+    "dev:web": "npm --workspace apps/web run dev",
+    "infra:up": "docker compose up -d",
+    "infra:down": "docker compose down"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "name": "@siem/sdk",
+  "version": "0.1.0",
+  "description": "TypeScript client SDK for sending security events to the SIEM",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc"
+  }
+}
