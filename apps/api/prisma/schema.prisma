@@ -2,12 +2,16 @@
 // docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // native = local dev; rhel = Vercel serverless (Amazon Linux); debian = Render.
+  binaryTargets = ["native", "rhel-openssl-3.0.x", "debian-openssl-3.0.x"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // Pooled (DATABASE_URL) for runtime; direct (DIRECT_URL) for migrations.
+  directUrl = env("DIRECT_URL")
 }
 
 // ── Enums ──────────────────────────────────────────────────

@@ -1,17 +1,11 @@
-import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
-import { AppModule } from './app.module';
+import { createApp } from './create-app';
 
+// Local / long-running server (npm run start:dev, node dist/main). On serverless
+// (Vercel) the entrypoint is api/index.ts instead, which never calls listen().
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await createApp();
 
-  app.setGlobalPrefix('api/v1');
-  app.enableCors();
-  app.useGlobalPipes(
-    new ValidationPipe({ whitelist: true, transform: true }),
-  );
-
-  const port = process.env.API_PORT ?? 4000;
+  const port = process.env.PORT ?? process.env.API_PORT ?? 4000;
   await app.listen(port);
   // eslint-disable-next-line no-console
   console.log(`SIEM API listening on http://localhost:${port}/api/v1`);
