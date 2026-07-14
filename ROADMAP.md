@@ -48,7 +48,7 @@ The engine runs every rule per ingested event; dedup suppresses duplicates.
       defensive). Populates the world map and activates `auth.new_country`.
       Source-provided `metadata.country` still wins.
 - [ ] IP reputation (AbuseIPDB / VirusTotal) — flag events from known-bad IPs.
-
+- [ ] Improve the status post (include like the payload, the file hash, like all request info important ones)
 ## 📡 More source events to emit (Bedrock)
 
 Auth is well covered (`LOGIN_*`, `LOGOUT`, `MFA_*`, `PASSWORD_RESET`, `ROLE_CHANGED`).

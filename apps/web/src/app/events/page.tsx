@@ -226,7 +226,7 @@ export default function EventsPage() {
                     )}
                   </TableCell>
                   <TableCell>
-                    <StatusCode code={e.statusCode} />
+                    <EventStatus event={e.eventType} code={e.statusCode} />
                   </TableCell>
                 </TableRow>
               ))
@@ -266,15 +266,33 @@ function FilterSelect({
   );
 }
 
-function StatusCode({ code }: { code: number | null }) {
-  if (code == null) return <span className="text-muted-foreground">—</span>;
-  const color =
-    code >= 500
-      ? 'text-severity-critical'
-      : code >= 400
-        ? 'text-severity-medium'
-        : 'text-emerald-400';
-  return <span className={`font-mono text-xs ${color}`}>{code}</span>;
+// Events without an HTTP status code (LOGOUT, MFA_*, ROLE_CHANGED, DATA_EXPORT…)
+// aren't HTTP requests, so derive a Failed/OK outcome from the event type
+// instead of leaving the cell blank.
+const FAILURE_EVENT = /(FAILED|DENIED|INVALID|LOCKED|SUSPICIOUS|ERROR|RATE_LIMIT|BLOCKED)/;
+
+function EventStatus({ event, code }: { event: string; code: number | null }) {
+  if (code != null) {
+    const color =
+      code >= 500
+        ? 'text-severity-critical'
+        : code >= 400
+          ? 'text-severity-medium'
+          : 'text-emerald-400';
+    return <span className={`font-mono text-xs ${color}`}>{code}</span>;
+  }
+  const failed = FAILURE_EVENT.test(event.toUpperCase());
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
+        failed
+          ? 'bg-severity-medium/15 text-severity-medium'
+          : 'bg-emerald-500/15 text-emerald-400'
+      }`}
+    >
+      {failed ? 'Failed' : 'OK'}
+    </span>
+  );
 }
 
 function Empty({ text }: { text: string }) {
