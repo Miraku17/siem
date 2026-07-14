@@ -35,6 +35,14 @@ enum AlertStatus {
   FALSE_POSITIVE
 }
 
+// Analyst's verdict after triage — separate from workflow status.
+enum AlertDisposition {
+  BENIGN
+  FALSE_POSITIVE
+  TRUE_POSITIVE_NO_IMPACT
+  TRUE_POSITIVE
+}
+
 enum IncidentStatus {
   OPEN
   INVESTIGATING
@@ -102,22 +110,37 @@ model SecurityEvent {
 }
 
 model Alert {
-  id          String      @id @default(cuid())
+  id          String            @id @default(cuid())
   title       String
   severity    Severity
-  status      AlertStatus @default(OPEN)
+  status      AlertStatus       @default(OPEN)
+  disposition AlertDisposition? // analyst verdict after triage
   description String?
   ruleId      String? // which detection rule fired
   eventId     String?
   incidentId  String?
-  createdAt   DateTime    @default(now())
+  createdAt   DateTime          @default(now())
 
   event    SecurityEvent? @relation(fields: [eventId], references: [id])
   incident Incident?      @relation(fields: [incidentId], references: [id])
+  comments AlertComment[]
 
   @@index([severity, status])
   @@index([createdAt])
   @@map("alerts")
+}
+
+model AlertComment {
+  id        String   @id @default(cuid())
+  alertId   String
+  author    String // analyst email
+  body      String
+  createdAt DateTime @default(now())
+
+  alert Alert @relation(fields: [alertId], references: [id], onDelete: Cascade)
+
+  @@index([alertId])
+  @@map("alert_comments")
 }
 
 model Incident {

@@ -1,7 +1,18 @@
-import { Body, Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
+import type { Request } from 'express';
 import { JwtGuard } from '../auth/jwt.guard';
 import { AlertsService } from './alerts.service';
 import { UpdateAlertDto } from './dto/update-alert.dto';
+import { CreateCommentDto } from './dto/create-comment.dto';
 
 @Controller('alerts')
 @UseGuards(JwtGuard)
@@ -18,9 +29,20 @@ export class AlertsController {
     return this.alerts.findOne(id);
   }
 
-  // Analyst changes the alert status (acknowledge / resolve / false-positive).
+  // Analyst updates workflow status and/or the triage disposition.
   @Patch(':id')
   update(@Param('id') id: string, @Body() dto: UpdateAlertDto) {
-    return this.alerts.updateStatus(id, dto.status);
+    return this.alerts.update(id, dto);
+  }
+
+  // Analyst adds a comment; the author is taken from the JWT.
+  @Post(':id/comments')
+  addComment(
+    @Param('id') id: string,
+    @Body() dto: CreateCommentDto,
+    @Req() req: Request,
+  ) {
+    const author = (req as any).user?.email ?? 'unknown';
+    return this.alerts.addComment(id, author, dto.body);
   }
 }

@@ -13,16 +13,31 @@ export class AlertsService {
     return this.prisma.alert.findUnique({
       where: { id },
       include: {
-        event: { include: { application: { select: { name: true, slug: true } } } },
+        event: {
+          include: { application: { select: { name: true, slug: true } } },
+        },
         incident: true,
+        comments: { orderBy: { createdAt: 'asc' } },
       },
     });
   }
 
-  updateStatus(id: string, status: string) {
+  // Update workflow status and/or the analyst's triage verdict.
+  update(id: string, data: { status?: string; disposition?: string }) {
     return this.prisma.alert.update({
       where: { id },
-      data: { status: status as any },
+      data: {
+        ...(data.status ? { status: data.status as any } : {}),
+        ...(data.disposition
+          ? { disposition: data.disposition as any }
+          : {}),
+      },
+    });
+  }
+
+  addComment(id: string, author: string, body: string) {
+    return this.prisma.alertComment.create({
+      data: { alertId: id, author, body },
     });
   }
 

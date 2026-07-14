@@ -18,15 +18,29 @@ export interface SecurityEvent {
   createdAt: string;
 }
 
+export type AlertDisposition =
+  | 'BENIGN'
+  | 'FALSE_POSITIVE'
+  | 'TRUE_POSITIVE_NO_IMPACT'
+  | 'TRUE_POSITIVE';
+
 export interface Alert {
   id: string;
   title: string;
   severity: Severity;
   status: string;
+  disposition: AlertDisposition | null;
   description: string | null;
   ruleId: string | null;
   eventId: string | null;
   incidentId: string | null;
+  createdAt: string;
+}
+
+export interface AlertComment {
+  id: string;
+  author: string;
+  body: string;
   createdAt: string;
 }
 
@@ -36,6 +50,7 @@ export interface AlertDetail extends Alert {
     | (SecurityEvent & { metadata?: Record<string, unknown> | null })
     | null;
   incident: Incident | null;
+  comments: AlertComment[];
 }
 
 export interface Incident {

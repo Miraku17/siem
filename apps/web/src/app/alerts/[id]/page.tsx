@@ -22,10 +22,9 @@ import {
   CheckCircle2,
   MessageSquare,
   Search,
-  Zap,
 } from 'lucide-react';
 import { api } from '@/lib/api';
-import type { AlertDetail, Severity } from '@/lib/types';
+import type { AlertDetail, AlertDisposition, Severity } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { StatusBadge } from '@/components/badges';
 import { Card, CardContent } from '@/components/ui/card';
@@ -42,6 +41,20 @@ const RISK: Record<Severity, { label: string; conf: string; className: string }>
   LOW: { label: 'Low Risk', conf: 'Low confidence', className: 'text-severity-low' },
 };
 
+const DISPOSITION_LABEL: Record<AlertDisposition, string> = {
+  BENIGN: 'Benign',
+  FALSE_POSITIVE: 'False Positive',
+  TRUE_POSITIVE_NO_IMPACT: 'True Positive · No Impact',
+  TRUE_POSITIVE: 'True Positive',
+};
+
+const DISPOSITIONS: { value: AlertDisposition; tone: string }[] = [
+  { value: 'BENIGN', tone: 'border-emerald-700/60 bg-emerald-500/10 text-emerald-400' },
+  { value: 'FALSE_POSITIVE', tone: 'border-border bg-muted text-foreground' },
+  { value: 'TRUE_POSITIVE_NO_IMPACT', tone: 'border-severity-medium/50 bg-severity-medium/10 text-severity-medium' },
+  { value: 'TRUE_POSITIVE', tone: 'border-severity-critical/50 bg-severity-critical/10 text-severity-critical' },
+];
+
 export default function AlertDetailPage({ params }: { params: { id: string } }) {
   const { id } = params;
   const qc = useQueryClient();
@@ -50,20 +63,31 @@ export default function AlertDetailPage({ params }: { params: { id: string } }) 
     queryFn: () => api<AlertDetail>(`/alerts/${id}`),
   });
 
-  const mutation = useMutation({
-    mutationFn: (status: string) =>
-      api(`/alerts/${id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ status }),
-      }),
+  const patch = useMutation({
+    mutationFn: (body: { status?: string; disposition?: string }) =>
+      api(`/alerts/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['alert', id] });
       qc.invalidateQueries({ queryKey: ['alerts'] });
       qc.invalidateQueries({ queryKey: ['overview'] });
     },
   });
-  const setStatus = (s: string) => mutation.mutate(s);
-  const busy = mutation.isPending;
+  const setStatus = (status: string) => patch.mutate({ status });
+  const setDisposition = (disposition: string) => patch.mutate({ disposition });
+  const busy = patch.isPending;
+
+  const [comment, setComment] = useState('');
+  const addComment = useMutation({
+    mutationFn: (body: string) =>
+      api(`/alerts/${id}/comments`, {
+        method: 'POST',
+        body: JSON.stringify({ body }),
+      }),
+    onSuccess: () => {
+      setComment('');
+      qc.invalidateQueries({ queryKey: ['alert', id] });
+    },
+  });
 
   if (isLoading) return <Skeleton className="h-[80vh] w-full" />;
   if (isError || !data)
@@ -175,25 +199,56 @@ export default function AlertDetailPage({ params }: { params: { id: string } }) 
 
         {/* RIGHT column */}
         <div className="space-y-4 xl:col-span-1">
-          <Section icon={ShieldCheck} title="Do This Now" accent>
-            <Button
-              className="w-full"
-              disabled={busy || data.status === 'ACKNOWLEDGED'}
-              onClick={() => setStatus('ACKNOWLEDGED')}
-            >
-              <ShieldCheck className="h-4 w-4" />
-              {data.status === 'ACKNOWLEDGED' ? 'Acknowledged' : 'Acknowledge & Secure'}
-            </Button>
-            <ul className="mt-3 space-y-2 text-sm">
-              <li className="flex items-center gap-2 text-muted-foreground">
-                <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                Reset password and notify user
-              </li>
-              <li className="flex items-center gap-2 text-muted-foreground">
-                <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                Sign out all active sessions
-              </li>
-            </ul>
+          <Section icon={ShieldCheck} title="Triage" accent>
+            <div className="flex flex-wrap items-center gap-2">
+              <StatusBadge status={data.status} />
+              {data.disposition && (
+                <DispositionBadge value={data.disposition} />
+              )}
+            </div>
+
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={busy || data.status === 'ACKNOWLEDGED'}
+                onClick={() => setStatus('ACKNOWLEDGED')}
+              >
+                {data.status === 'ACKNOWLEDGED' ? 'Acknowledged' : 'Acknowledge'}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={busy || data.status === 'RESOLVED'}
+                onClick={() => setStatus('RESOLVED')}
+              >
+                {data.status === 'RESOLVED' ? 'Resolved' : 'Resolve'}
+              </Button>
+            </div>
+
+            <div className="mt-4 text-[10px] uppercase tracking-wide text-muted-foreground">
+              Classification
+            </div>
+            <div className="mt-2 space-y-2">
+              {DISPOSITIONS.map((d) => (
+                <button
+                  key={d.value}
+                  disabled={busy}
+                  onClick={() => setDisposition(d.value)}
+                  className={cn(
+                    'flex w-full items-center justify-between rounded-md border px-3 py-2 text-left text-sm transition-colors disabled:opacity-50',
+                    data.disposition === d.value
+                      ? d.tone
+                      : 'border-border hover:bg-accent',
+                  )}
+                >
+                  {DISPOSITION_LABEL[d.value]}
+                  {data.disposition === d.value && (
+                    <CheckCircle2 className="h-4 w-4 shrink-0" />
+                  )}
+                </button>
+              ))}
+            </div>
           </Section>
 
           <Section title="Quick Actions">
@@ -201,31 +256,53 @@ export default function AlertDetailPage({ params }: { params: { id: string } }) 
               <ActionButton icon={Ban} label="Block Sign-In" />
               <ActionButton icon={Lock} label="Require MFA" />
               <ActionButton icon={UserPlus} label="Assign to…" />
-              <ActionButton
-                icon={ShieldCheck}
-                label="Mark as False Positive"
-                disabled={busy || data.status === 'FALSE_POSITIVE'}
-                onClick={() => setStatus('FALSE_POSITIVE')}
-              />
-              <button
-                disabled={busy || data.status === 'RESOLVED'}
-                onClick={() => setStatus('RESOLVED')}
-                className="flex w-full items-center justify-center gap-2 rounded-md border border-emerald-800/60 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-400 transition-colors hover:bg-emerald-500/20 disabled:opacity-50"
-              >
-                <CheckCircle2 className="h-4 w-4" />
-                {data.status === 'RESOLVED' ? 'Resolved' : 'Resolve Alert'}
-              </button>
             </div>
           </Section>
 
-          <Section icon={MessageSquare} title="Notes & Activity">
-            <textarea
-              placeholder="Add a note…"
-              className="min-h-[64px] w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30"
-            />
-            <div className="mt-4 space-y-3">
+          <Section icon={MessageSquare} title="Comments">
+            <div className="space-y-2.5">
+              {data.comments.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No comments yet.</p>
+              ) : (
+                data.comments.map((c) => (
+                  <div
+                    key={c.id}
+                    className="rounded-md border border-border bg-background p-2.5"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="truncate text-xs font-medium">
+                        {c.author}
+                      </span>
+                      <span className="shrink-0 text-[10px] text-muted-foreground">
+                        {new Date(c.createdAt).toLocaleString()}
+                      </span>
+                    </div>
+                    <p className="mt-1 whitespace-pre-wrap text-sm">{c.body}</p>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="mt-3">
+              <textarea
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                placeholder="Add a comment…"
+                className="min-h-[64px] w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30"
+              />
+              <Button
+                className="mt-2 w-full"
+                size="sm"
+                disabled={!comment.trim() || addComment.isPending}
+                onClick={() => addComment.mutate(comment.trim())}
+              >
+                {addComment.isPending ? 'Posting…' : 'Post comment'}
+              </Button>
+            </div>
+
+            <div className="mt-4 space-y-3 border-t border-border pt-3">
               <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                Activity Log
+                Activity
               </div>
               <LogItem
                 who="System"
@@ -240,7 +317,11 @@ export default function AlertDetailPage({ params }: { params: { id: string } }) 
                 />
               )}
               {data.incident && (
-                <LogItem who="System" when="" what={`Linked to incident: ${data.incident.title}`} />
+                <LogItem
+                  who="System"
+                  when=""
+                  what={`Linked to incident: ${data.incident.title}`}
+                />
               )}
             </div>
           </Section>
@@ -541,6 +622,14 @@ function Section({
         {children}
       </CardContent>
     </Card>
+  );
+}
+
+function DispositionBadge({ value }: { value: AlertDisposition }) {
+  return (
+    <span className="inline-flex items-center rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-medium text-primary">
+      {DISPOSITION_LABEL[value]}
+    </span>
   );
 }
 
