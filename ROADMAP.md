@@ -49,6 +49,39 @@ The engine runs every rule per ingested event; dedup suppresses duplicates.
       Source-provided `metadata.country` still wins.
 - [ ] IP reputation (AbuseIPDB / VirusTotal) — flag events from known-bad IPs.
 
+## 📡 More source events to emit (Bedrock)
+
+Auth is well covered (`LOGIN_*`, `LOGOUT`, `MFA_*`, `PASSWORD_RESET`, `ROLE_CHANGED`).
+Next tier for an accounting app = who touches financial data + privileged admin
+actions. Emit via the existing `logSecurityEvent` helper; put context
+(`businessId`, record counts, target user) in `metadata`. Each pairs with a new
+SIEM detection rule.
+
+**🔴 Data movement — the top non-auth signal for financial software**
+- [ ] **`DATA_EXPORT`** — chart-of-accounts / report / xlsx export → exfiltration signal
+- [ ] **`DATA_IMPORT`** — bulk CSV/xlsx import (papaparse) → tampering / injection
+- [ ] **`BULK_DELETE`** — mass deletion of records → sabotage / covering tracks
+
+**🟠 Financial record integrity (accounting-specific)**
+- [ ] **`LEDGER_ENTRY_CREATED/_UPDATED/_DELETED`** — esp. large, backdated, or deleted entries
+- [ ] **`ACCOUNT_MODIFIED`** — chart-of-accounts add/rename/delete
+
+**🟠 Privileged / admin actions (insider threat + post-takeover)** — hooks exist in
+`admin/team/actions.ts`
+- [ ] **`ADMIN_MFA_RESET`** — `resetUserMfa` (admin resets someone else's MFA — major takeover enabler)
+- [ ] **`OWNER_GRANTED` / `OWNER_REVOKED`** — `grantOwner` / `revokeOwner`
+- [ ] **`USER_CREATED`** — invite accepted (`/auth/confirm`)
+- [ ] **`USER_DELETED`** — member removed (`removeMember` in `team/actions.ts`)
+- [ ] **`BUSINESS_CREATED` / `_DELETED`** — `businesses/actions.ts`
+
+**🟡 Access & abuse**
+- [ ] **`ACCESS_DENIED`** — 403s on resources a user doesn't belong to → IDOR / tenant probing
+- [ ] **`RATE_LIMIT_TRIGGERED`** — Supabase "too many attempts" (already detected in `friendlyMessage`)
+
+> **Suggested first batch:** `DATA_EXPORT` + `ADMIN_MFA_RESET` + `USER_DELETED`
+> (exfiltration, takeover-enabler, insider offboarding). Then add matching SIEM
+> rules (e.g. a *mass-export* alert).
+
 ## 🟡 Incidents & response
 
 - [ ] Auto-group related alerts into an **Incident** (same IP/user/rule within a window).
