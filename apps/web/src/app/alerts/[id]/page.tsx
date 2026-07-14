@@ -16,12 +16,10 @@ import {
   Network,
   ShieldCheck,
   ShieldAlert,
-  Ban,
-  Lock,
-  UserPlus,
   CheckCircle2,
   MessageSquare,
   Search,
+  ClipboardCheck,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import type { AlertDetail, AlertDisposition, Severity } from '@/lib/types';
@@ -31,6 +29,13 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 
 const HIGH_RISK_COUNTRIES = ['Russia', 'North Korea', 'Iran', 'Nigeria'];
 
@@ -58,6 +63,9 @@ const DISPOSITIONS: { value: AlertDisposition; tone: string }[] = [
 export default function AlertDetailPage({ params }: { params: { id: string } }) {
   const { id } = params;
   const qc = useQueryClient();
+  const [triageOpen, setTriageOpen] = useState(false);
+  const [comment, setComment] = useState('');
+
   const { data, isLoading, isError } = useQuery({
     queryKey: ['alert', id],
     queryFn: () => api<AlertDetail>(`/alerts/${id}`),
@@ -76,7 +84,6 @@ export default function AlertDetailPage({ params }: { params: { id: string } }) 
   const setDisposition = (disposition: string) => patch.mutate({ disposition });
   const busy = patch.isPending;
 
-  const [comment, setComment] = useState('');
   const addComment = useMutation({
     mutationFn: (body: string) =>
       api(`/alerts/${id}/comments`, {
@@ -113,8 +120,9 @@ export default function AlertDetailPage({ params }: { params: { id: string } }) 
           <h1 className="mt-2 text-2xl font-semibold tracking-tight">
             {data.title}
           </h1>
-          <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
             <StatusBadge status={data.status} />
+            {data.disposition && <DispositionBadge value={data.disposition} />}
             <span className="inline-flex items-center gap-1.5">
               <Clock className="h-3.5 w-3.5" />
               First seen: {ev ? new Date(ev.timestamp).toLocaleString() : '—'}
@@ -130,23 +138,35 @@ export default function AlertDetailPage({ params }: { params: { id: string } }) 
           </div>
         </div>
 
-        <Card className="w-64 shrink-0">
-          <CardContent className="space-y-1 pt-5">
-            <div className="flex items-center gap-2 text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
-              <span className={cn('h-2 w-2 rounded-full', risk.className.replace('text-', 'bg-'))} />
-              Risk Summary
-            </div>
-            <div className={cn('text-2xl font-semibold', risk.className)}>
-              {risk.label}
-            </div>
-            <div className="text-sm text-muted-foreground">{risk.conf}</div>
-          </CardContent>
-        </Card>
+        <div className="flex w-64 shrink-0 flex-col gap-3">
+          <Card>
+            <CardContent className="space-y-1 pt-5">
+              <div className="flex items-center gap-2 text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
+                <span className={cn('h-2 w-2 rounded-full', risk.className.replace('text-', 'bg-'))} />
+                Risk Summary
+              </div>
+              <div className={cn('text-2xl font-semibold', risk.className)}>
+                {risk.label}
+              </div>
+              <div className="text-sm text-muted-foreground">{risk.conf}</div>
+            </CardContent>
+          </Card>
+          <Button onClick={() => setTriageOpen(true)}>
+            <ClipboardCheck className="h-4 w-4" />
+            Triage &amp; Notes
+            {data.comments.length > 0 && (
+              <span className="ml-1 rounded-full bg-primary-foreground/20 px-1.5 text-xs">
+                {data.comments.length}
+              </span>
+            )}
+          </Button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-4">
-        {/* LEFT column */}
-        <div className="space-y-4 xl:col-span-1">
+      {/* Body */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        {/* Context column */}
+        <div className="space-y-4 lg:col-span-1">
           <Section icon={Lightbulb} title="What's Happening" accent>
             <ul className="space-y-2.5 text-sm">
               {buildNarrative(data, country).map((line, i) => (
@@ -191,23 +211,29 @@ export default function AlertDetailPage({ params }: { params: { id: string } }) 
           </Section>
         </div>
 
-        {/* CENTER column */}
-        <div className="space-y-4 xl:col-span-2">
+        {/* Evidence + timeline */}
+        <div className="space-y-4 lg:col-span-2">
           <EvidenceOverview data={data} country={country} reason={reason} />
           <ActivityTimeline data={data} country={country} reason={reason} />
         </div>
+      </div>
 
-        {/* RIGHT column */}
-        <div className="space-y-4 xl:col-span-1">
-          <Section icon={ShieldCheck} title="Triage" accent>
+      {/* Triage & Notes modal */}
+      <Dialog open={triageOpen} onOpenChange={setTriageOpen}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Triage &amp; Notes</DialogTitle>
+            <DialogDescription>{data.title}</DialogDescription>
+          </DialogHeader>
+
+          {/* Status */}
+          <div className="space-y-2">
+            <FieldLabel>Status</FieldLabel>
             <div className="flex flex-wrap items-center gap-2">
               <StatusBadge status={data.status} />
-              {data.disposition && (
-                <DispositionBadge value={data.disposition} />
-              )}
+              {data.disposition && <DispositionBadge value={data.disposition} />}
             </div>
-
-            <div className="mt-3 grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               <Button
                 variant="outline"
                 size="sm"
@@ -225,18 +251,19 @@ export default function AlertDetailPage({ params }: { params: { id: string } }) 
                 {data.status === 'RESOLVED' ? 'Resolved' : 'Resolve'}
               </Button>
             </div>
+          </div>
 
-            <div className="mt-4 text-[10px] uppercase tracking-wide text-muted-foreground">
-              Classification
-            </div>
-            <div className="mt-2 space-y-2">
+          {/* Classification */}
+          <div className="space-y-2">
+            <FieldLabel>Classification</FieldLabel>
+            <div className="grid grid-cols-2 gap-2">
               {DISPOSITIONS.map((d) => (
                 <button
                   key={d.value}
                   disabled={busy}
                   onClick={() => setDisposition(d.value)}
                   className={cn(
-                    'flex w-full items-center justify-between rounded-md border px-3 py-2 text-left text-sm transition-colors disabled:opacity-50',
+                    'flex items-center justify-between rounded-md border px-3 py-2 text-left text-sm transition-colors disabled:opacity-50',
                     data.disposition === d.value
                       ? d.tone
                       : 'border-border hover:bg-accent',
@@ -249,17 +276,11 @@ export default function AlertDetailPage({ params }: { params: { id: string } }) 
                 </button>
               ))}
             </div>
-          </Section>
+          </div>
 
-          <Section title="Quick Actions">
-            <div className="space-y-2">
-              <ActionButton icon={Ban} label="Block Sign-In" />
-              <ActionButton icon={Lock} label="Require MFA" />
-              <ActionButton icon={UserPlus} label="Assign to…" />
-            </div>
-          </Section>
-
-          <Section icon={MessageSquare} title="Comments">
+          {/* Comments */}
+          <div className="space-y-2">
+            <FieldLabel>Comments</FieldLabel>
             <div className="space-y-2.5">
               {data.comments.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No comments yet.</p>
@@ -282,51 +303,23 @@ export default function AlertDetailPage({ params }: { params: { id: string } }) 
                 ))
               )}
             </div>
-
-            <div className="mt-3">
-              <textarea
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-                placeholder="Add a comment…"
-                className="min-h-[64px] w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30"
-              />
-              <Button
-                className="mt-2 w-full"
-                size="sm"
-                disabled={!comment.trim() || addComment.isPending}
-                onClick={() => addComment.mutate(comment.trim())}
-              >
-                {addComment.isPending ? 'Posting…' : 'Post comment'}
-              </Button>
-            </div>
-
-            <div className="mt-4 space-y-3 border-t border-border pt-3">
-              <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                Activity
-              </div>
-              <LogItem
-                who="System"
-                when={new Date(data.createdAt).toLocaleTimeString()}
-                what="Alert created"
-              />
-              {ev && (
-                <LogItem
-                  who="Detection"
-                  when={new Date(ev.timestamp).toLocaleTimeString()}
-                  what={`Triggering event: ${ev.eventType}`}
-                />
-              )}
-              {data.incident && (
-                <LogItem
-                  who="System"
-                  when=""
-                  what={`Linked to incident: ${data.incident.title}`}
-                />
-              )}
-            </div>
-          </Section>
-        </div>
-      </div>
+            <textarea
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              placeholder="Add a comment…"
+              className="min-h-[64px] w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30"
+            />
+            <Button
+              className="w-full"
+              size="sm"
+              disabled={!comment.trim() || addComment.isPending}
+              onClick={() => addComment.mutate(comment.trim())}
+            >
+              {addComment.isPending ? 'Posting…' : 'Post comment'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -482,7 +475,8 @@ function ActivityTimeline({
     {
       title: 'Response',
       items: [
-        { time: alTime, text: `Status set to ${data.status}`, active: true },
+        { time: alTime, text: `Status: ${data.status}`, active: true },
+        data.disposition && { time: '', text: `Classified: ${DISPOSITION_LABEL[data.disposition]}`, active: true },
         data.incident && { time: '', text: `Linked to incident: ${data.incident.title}`, active: false },
       ].filter(Boolean) as { time: string; text: string; active: boolean }[],
     },
@@ -592,6 +586,14 @@ function buildEvidence(
 
 /* ─── Small pieces ──────────────────────────────────────────── */
 
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+      {children}
+    </div>
+  );
+}
+
 function Section({
   icon: Icon,
   title,
@@ -661,52 +663,6 @@ function Affected({
           {label}
         </div>
         <div className="truncate text-sm">{value}</div>
-      </div>
-    </div>
-  );
-}
-
-function ActionButton({
-  icon: Icon,
-  label,
-  onClick,
-  disabled,
-}: {
-  icon: any;
-  label: string;
-  onClick?: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className="flex w-full items-center gap-2.5 rounded-md border border-border bg-background px-3 py-2 text-sm transition-colors hover:bg-accent disabled:opacity-50"
-    >
-      <Icon className="h-4 w-4 text-muted-foreground" />
-      {label}
-    </button>
-  );
-}
-
-function LogItem({
-  who,
-  when,
-  what,
-}: {
-  who: string;
-  when: string;
-  what: string;
-}) {
-  return (
-    <div className="flex gap-2.5 text-sm">
-      <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-      <div>
-        <div className="flex items-center gap-2">
-          <span className="font-medium">{who}</span>
-          {when && <span className="text-xs text-muted-foreground">{when}</span>}
-        </div>
-        <div className="text-muted-foreground">{what}</div>
       </div>
     </div>
   );
