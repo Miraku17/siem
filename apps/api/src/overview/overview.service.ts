@@ -129,18 +129,33 @@ export class OverviewService {
     return { hours, series };
   }
 
-  // Event counts grouped by country from event metadata (for the map).
+  // Event counts grouped by country (with coordinates) from event metadata,
+  // for the map. Coords come from GeoIP enrichment at ingestion.
   private async geo() {
     const rows = await this.prisma.securityEvent.findMany({
       select: { metadata: true },
     });
-    const counts = new Map<string, number>();
+    const map = new Map<
+      string,
+      { count: number; lat?: number; lng?: number }
+    >();
     rows.forEach((r) => {
-      const country = (r.metadata as any)?.country;
-      if (typeof country === 'string' && country.trim()) {
-        counts.set(country, (counts.get(country) ?? 0) + 1);
+      const m = r.metadata as Record<string, unknown> | null;
+      const country = m?.country;
+      if (typeof country !== 'string' || !country.trim()) return;
+      const entry = map.get(country) ?? { count: 0 };
+      entry.count++;
+      if (entry.lat == null && typeof m?.lat === 'number') {
+        entry.lat = m.lat as number;
+        entry.lng = m.lng as number;
       }
+      map.set(country, entry);
     });
-    return [...counts.entries()].map(([country, count]) => ({ country, count }));
+    return [...map.entries()].map(([country, v]) => ({
+      country,
+      count: v.count,
+      lat: v.lat,
+      lng: v.lng,
+    }));
   }
 }

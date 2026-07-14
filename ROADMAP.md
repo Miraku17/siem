@@ -43,8 +43,10 @@ The engine runs every rule per ingested event; dedup suppresses duplicates.
 
 ## 🟠 Enrichment
 
-- [ ] **GeoIP** (MaxMind GeoLite2, free) — resolve `metadata.country` + lat/lng from IP
-      at ingestion. Unlocks the world map (currently empty) + the geo rules above.
+- [x] **GeoIP** — `apps/api/src/events/geoip.ts` resolves `country` + `lat`/`lng`
+      from the IP at ingestion (via ipwho.is, cached, private-IP aware, fully
+      defensive). Populates the world map and activates `auth.new_country`.
+      Source-provided `metadata.country` still wins.
 - [ ] IP reputation (AbuseIPDB / VirusTotal) — flag events from known-bad IPs.
 
 ## 🟡 Incidents & response

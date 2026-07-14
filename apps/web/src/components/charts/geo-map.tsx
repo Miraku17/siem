@@ -23,7 +23,11 @@ const COUNTRY_COORDS: Record<string, [number, number]> = {
   Netherlands: [5.29, 52.13],
 };
 
-export function GeoMap({ data }: { data: { country: string; count: number }[] }) {
+export function GeoMap({
+  data,
+}: {
+  data: { country: string; count: number; lat?: number; lng?: number }[];
+}) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -43,8 +47,13 @@ export function GeoMap({ data }: { data: { country: string; count: number }[] })
 
   const points = data
     .map((d) => {
-      const coord = COUNTRY_COORDS[d.country];
-      return coord ? { name: d.country, value: [...coord, d.count] } : null;
+      // Prefer real coordinates from GeoIP enrichment; fall back to the
+      // country-centroid table for events that predate enrichment.
+      const coord: [number, number] | undefined =
+        typeof d.lng === 'number' && typeof d.lat === 'number'
+          ? [d.lng, d.lat]
+          : COUNTRY_COORDS[d.country];
+      return coord ? { name: d.country, value: [coord[0], coord[1], d.count] } : null;
     })
     .filter(Boolean);
 

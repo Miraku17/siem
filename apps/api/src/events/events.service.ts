@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { DetectionService } from '../detection/detection.service';
 import { IngestEventDto } from './dto/ingest-event.dto';
+import { lookupGeo } from './geoip';
 
 @Injectable()
 export class EventsService {
@@ -12,6 +13,11 @@ export class EventsService {
 
   // Normalize + persist an incoming event, then hand it to the detection engine.
   async ingest(dto: IngestEventDto, applicationId: string) {
+    // GeoIP enrichment — resolve country + coords from the IP. Source-provided
+    // metadata wins, so a sender that already knows the country isn't clobbered.
+    const geo = await lookupGeo(dto.ip);
+    const metadata = { ...geo, ...(dto.metadata ?? {}) };
+
     const event = await this.prisma.securityEvent.create({
       data: {
         applicationId,
@@ -25,7 +31,7 @@ export class EventsService {
         statusCode: dto.statusCode,
         userAgent: dto.userAgent,
         timestamp: dto.timestamp ? new Date(dto.timestamp) : new Date(),
-        metadata: (dto.metadata ?? {}) as object,
+        metadata: metadata as object,
       },
     });
 

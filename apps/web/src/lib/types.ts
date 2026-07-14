@@ -80,5 +80,5 @@ export interface Overview {
   recentAlerts: Alert[];
   eventTypes: { type: string; count: number }[];
   logSources: { hours: string[]; series: { name: string; data: number[] }[] };
-  geo: { country: string; count: number }[];
+  geo: { country: string; count: number; lat?: number; lng?: number }[];
 }
