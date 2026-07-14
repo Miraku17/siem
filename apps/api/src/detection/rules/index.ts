@@ -7,6 +7,9 @@ import { privilegeEscalationRule } from './privilege-escalation.rule';
 import { newCountryRule } from './new-country.rule';
 import { newIpRule } from './new-ip.rule';
 import { massExportRule } from './mass-export.rule';
+import { adminMfaResetRule } from './admin-mfa-reset.rule';
+import { mfaResetTakeoverRule } from './mfa-reset-takeover.rule';
+import { massUserRemovalRule } from './mass-user-removal.rule';
 
 // Registered detection rules. Each is evaluated against every ingested event;
 // a match raises an alert (deduplicated per the rule's dedupe key).
@@ -19,4 +22,7 @@ export const DETECTION_RULES: DetectionRule[] = [
   newCountryRule,
   newIpRule,
   massExportRule,
+  adminMfaResetRule,
+  mfaResetTakeoverRule,
+  massUserRemovalRule,
 ];
