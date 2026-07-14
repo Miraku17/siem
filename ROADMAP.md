@@ -1,0 +1,123 @@
+# SIEM Platform — Roadmap / Checklist
+
+Living checklist of what's shipped and what's next, priority-ordered.
+Legend: 🔴 high impact · 🟠 next · 🟡 rounding out · 🟢 hardening · ⚪ later.
+
+---
+
+## ✅ Shipped
+
+- [x] Event ingestion API (API-key auth) + normalization + persistence (Prisma/Postgres)
+- [x] Detection engine scaffold + **brute-force rule** (`auth.brute_force`)
+- [x] Dashboard auth: `POST /auth/login` (JWT, scrypt-hashed passwords), login page, route guard
+- [x] Dashboard (shadcn/ui, dark SOC theme): Overview (severity cards, world map, alert-types
+      donut, event-volume area chart), Events (filterable table), Alerts, Incidents, Applications
+- [x] Alert detail page (evidence overview, activity timeline, risk summary) +
+      status actions (`PATCH /alerts/:id`: acknowledge / resolve / false-positive)
+- [x] `GET /overview` aggregate endpoint (counts, severity breakdown, timeline, geo)
+- [x] **Deployed to prod:** Neon (DB) + Vercel serverless (API) + Vercel (web)
+- [x] **Bedrock integration** (live): `LOGIN_SUCCESS/FAILED`, `LOGOUT` (+actor),
+      `MFA_SUCCESS/FAILED`, `PASSWORD_RESET`, `ROLE_CHANGED`
+
+---
+
+## ✅ Detection rules — DONE (implemented + verified end-to-end)
+
+Rules live in `apps/api/src/detection/rules/` and are registered in `rules/index.ts`.
+The engine runs every rule per ingested event; dedup suppresses duplicates.
+
+- [x] **MFA fatigue** (`auth.mfa_fatigue`) — ≥5 `MFA_FAILED`/user in 10m → **HIGH**
+- [x] **Account-takeover chain** (`auth.takeover_chain`) — `PASSWORD_RESET` then
+      `LOGIN_SUCCESS` from a never-seen IP within 6h → **CRITICAL**
+- [x] **Brute force that succeeded** (`auth.brute_force_success`) — ≥5 `LOGIN_FAILED`
+      then a `LOGIN_SUCCESS` from the same IP → **CRITICAL**
+- [x] **Privilege escalation** (`authz.privilege_escalation`) — `ROLE_CHANGED` with
+      `metadata.to === "admin"` → **HIGH**
+- [x] **New country** (`auth.new_country`) — `metadata.country` new for a user → **HIGH**
+      (fires once GeoIP populates `metadata.country`)
+- [x] **New device / new IP** (`auth.new_ip`) — login from an IP the account has never
+      used → **MEDIUM**
+- [x] **Alert dedup** — cooldown per rule + entity (IP/user/email), matched via the
+      alert's linked event; no schema change needed. Default 15m window.
+- [ ] Impossible travel (time+distance between logins) — stretch; needs GeoIP lat/lng.
+
+## 🟠 Enrichment
+
+- [ ] **GeoIP** (MaxMind GeoLite2, free) — resolve `metadata.country` + lat/lng from IP
+      at ingestion. Unlocks the world map (currently empty) + the geo rules above.
+- [ ] IP reputation (AbuseIPDB / VirusTotal) — flag events from known-bad IPs.
+
+## 🟡 Incidents & response
+
+- [ ] Auto-group related alerts into an **Incident** (same IP/user/rule within a window).
+      The Incidents page exists but nothing populates it.
+- [ ] Incident view: assign, change status/priority, list linked alerts.
+- [ ] **Notifications** — Slack / Discord / Email / webhook on CRITICAL alerts.
+      (A SIEM no one watches is just a database.)
+
+## 🟡 Dashboard
+
+- [ ] **Investigation timeline** — `events/[id]` is still a placeholder; show the
+      correlated event chain + resulting alert/incident.
+- [ ] **Search DSL** on Events (`event:LOGIN_FAILED ip:1.2.3.4 severity:HIGH`).
+- [ ] Applications page: per-app metrics (events today, alerts, failed logins, traffic).
+- [ ] User risk scoring (aggregate signal per user/account).
+
+## 🟢 Hardening / ops
+
+- [ ] Move detection off the request path onto **BullMQ + Redis** (already in
+      `docker-compose.yml`, unused) so ingestion stays fast under load.
+- [ ] Rate-limit the ingestion endpoint.
+- [ ] Pagination on all list endpoints (events/alerts/incidents).
+- [ ] API tests (Jest is set up) for guards, ingestion, and each rule.
+- [ ] Retention policy (e.g. raw events 30–90d, alerts longer).
+- [ ] Dockerfiles for `api` + `web`.
+
+## 🔒 Security hygiene (do before "real")
+
+- [ ] **Change the seeded admin password** — still `admin1234` in prod.
+- [ ] **Rotate the Neon DB password** — it was exposed during setup; update
+      `apps/api/.env` + the API project's `DATABASE_URL`/`DIRECT_URL`.
+- [ ] Restrict CORS: confirm `WEB_ORIGIN` is set on the deployed API.
+- [ ] Add a real user-management flow (invite / roles) instead of a single seeded admin.
+
+## ⚪ Later / stretch
+
+- [ ] More source apps via `@siem/sdk` (Velocity, POS, …).
+- [ ] MITRE ATT&CK mapping on alerts.
+- [ ] IOC management, Sigma-rule import.
+- [ ] SSO for dashboard analysts.
+
+---
+
+### How to add a detection rule (quick reference)
+
+```ts
+// apps/api/src/detection/rules/mfa-fatigue.rule.ts
+import { SecurityEvent } from '@prisma/client';
+import { DetectionRule, RuleMatch } from '../detection-rule.interface';
+import { PrismaService } from '../../prisma/prisma.service';
+
+export const mfaFatigueRule: DetectionRule = {
+  id: 'auth.mfa_fatigue',
+  async evaluate(event: SecurityEvent, prisma: PrismaService): Promise<RuleMatch | null> {
+    if (event.eventType !== 'MFA_FAILED' || !event.userId) return null;
+    const count = await prisma.securityEvent.count({
+      where: {
+        eventType: 'MFA_FAILED',
+        userId: event.userId,
+        timestamp: { gte: new Date(event.timestamp.getTime() - 10 * 60_000) },
+      },
+    });
+    if (count >= 5) {
+      return {
+        title: 'Possible MFA fatigue',
+        severity: 'HIGH',
+        description: `${count} failed MFA attempts for ${event.email ?? event.userId} in 10 minutes.`,
+      };
+    }
+    return null;
+  },
+};
+// then register it in apps/api/src/detection/rules/index.ts
+```

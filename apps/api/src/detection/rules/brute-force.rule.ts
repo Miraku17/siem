@@ -26,6 +26,7 @@ export const bruteForceRule: DetectionRule = {
         title: 'Credential stuffing / brute force',
         severity: 'CRITICAL',
         description: `50+ failed logins from ${event.ipAddress} within 5 minutes.`,
+        dedupe: { field: 'ipAddress', value: event.ipAddress },
       };
     }
 
@@ -34,6 +35,7 @@ export const bruteForceRule: DetectionRule = {
         title: 'Repeated failed logins',
         severity: 'MEDIUM',
         description: `5+ failed logins from ${event.ipAddress} within 60 seconds.`,
+        dedupe: { field: 'ipAddress', value: event.ipAddress },
       };
     }
 

@@ -1,8 +1,20 @@
 import { DetectionRule } from '../detection-rule.interface';
 import { bruteForceRule } from './brute-force.rule';
+import { bruteForceSuccessRule } from './brute-force-success.rule';
+import { mfaFatigueRule } from './mfa-fatigue.rule';
+import { takeoverChainRule } from './takeover-chain.rule';
+import { privilegeEscalationRule } from './privilege-escalation.rule';
+import { newCountryRule } from './new-country.rule';
+import { newIpRule } from './new-ip.rule';
 
-// Register detection rules here. Additional starter rules to implement:
-//   - admin.new_country       Admin login from a new country       -> CRITICAL
-//   - dos.request_flood       100 requests within 30s              -> HIGH
-//   - abuse.access_denied     Repeated ACCESS_DENIED               -> MEDIUM
-export const DETECTION_RULES: DetectionRule[] = [bruteForceRule];
+// Registered detection rules. Each is evaluated against every ingested event;
+// a match raises an alert (deduplicated per the rule's dedupe key).
+export const DETECTION_RULES: DetectionRule[] = [
+  bruteForceRule,
+  bruteForceSuccessRule,
+  mfaFatigueRule,
+  takeoverChainRule,
+  privilegeEscalationRule,
+  newCountryRule,
+  newIpRule,
+];
