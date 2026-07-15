@@ -573,6 +573,20 @@ function buildEvidence(
     rows.push({ category: 'Network', icon: MapPin, description: `Login originated from ${country}`, time, status: 'Verified' });
   if (ev.ipAddress)
     rows.push({ category: 'Network', icon: Network, description: `Source IP ${ev.ipAddress}`, time, status: 'Suspected' });
+  const threat = (ev.metadata as any)?.threat as
+    | { score?: number; listed?: boolean; source?: string }
+    | undefined;
+  if (threat && (threat.listed || (threat.score ?? 0) > 0))
+    rows.push({
+      category: 'Network',
+      icon: ShieldAlert,
+      description: `IP reputation: ${threat.score ?? 0}/100${
+        threat.listed ? ' · blocklisted' : ''
+      }${threat.source ? ` (${threat.source})` : ''}`,
+      time,
+      status:
+        threat.listed || (threat.score ?? 0) >= 25 ? 'Suspected' : 'Verified',
+    });
   if (ev.userAgent)
     rows.push({ category: 'Device', icon: Monitor, description: `Device: ${ev.userAgent}`, time, status: 'Verified' });
   if (ev.statusCode != null)

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Search } from 'lucide-react';
+import { Search, ShieldAlert } from 'lucide-react';
 import { api } from '@/lib/api';
 import type { SecurityEvent, Severity } from '@/lib/types';
 import { relativeTime } from '@/lib/format';
@@ -210,7 +210,10 @@ export default function EventsPage() {
                     {e.email ?? e.userId ?? '—'}
                   </TableCell>
                   <TableCell className="whitespace-nowrap font-mono text-xs">
-                    {e.ipAddress ?? '—'}
+                    <span className="inline-flex items-center gap-1.5">
+                      {e.ipAddress ?? '—'}
+                      <ThreatBadge metadata={e.metadata} />
+                    </span>
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-muted-foreground">
                     {e.endpoint ? (
@@ -290,6 +293,33 @@ function EventStatus({ event, code }: { event: string; code: number | null }) {
       }`}
     >
       {failed ? 'Failed' : 'OK'}
+    </span>
+  );
+}
+
+// IP reputation badge from threat-intel enrichment (metadata.threat). Only shown
+// when the IP has a non-zero score or is blocklisted; clean IPs stay uncluttered.
+function ThreatBadge({ metadata }: { metadata?: Record<string, unknown> | null }) {
+  const threat = (metadata as any)?.threat as
+    | { score?: number; listed?: boolean }
+    | undefined;
+  if (!threat) return null;
+  const score = threat.score ?? 0;
+  if (!threat.listed && score < 1) return null;
+
+  const tone =
+    score >= 80 || threat.listed
+      ? 'bg-severity-critical/15 text-severity-critical'
+      : score >= 25
+        ? 'bg-severity-high/15 text-severity-high'
+        : 'bg-severity-medium/15 text-severity-medium';
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${tone}`}
+      title={`Threat score ${score}/100${threat.listed ? ' · blocklisted' : ''}`}
+    >
+      <ShieldAlert className="h-3 w-3" />
+      {score}
     </span>
   );
 }
