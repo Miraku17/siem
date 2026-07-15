@@ -6,7 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Siren } from 'lucide-react';
 import { api } from '@/lib/api';
 import type { Overview } from '@/lib/types';
-import { PageHeader, LiveIndicator } from '@/components/page-header';
+import { PageHeader, RefreshButton } from '@/components/page-header';
 import { SeverityCards } from '@/components/severity-cards';
 import { SeverityBadge } from '@/components/badges';
 import {
@@ -32,10 +32,9 @@ const GeoMap = dynamic(
 );
 
 export default function OverviewPage() {
-  const { data, isLoading, isFetching } = useQuery({
+  const { data, isLoading, isFetching, refetch } = useQuery({
     queryKey: ['overview'],
     queryFn: () => api<Overview>('/overview'),
-    refetchInterval: 10_000,
   });
 
   return (
@@ -44,7 +43,7 @@ export default function OverviewPage() {
         title="Overview"
         description="Security posture across all connected sources."
       >
-        <LiveIndicator active={isFetching} />
+        <RefreshButton spinning={isFetching} onClick={() => refetch()} />
       </PageHeader>
 
       <SeverityCards alerts={data?.alerts} loading={isLoading} />

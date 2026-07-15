@@ -1,3 +1,5 @@
+import { RefreshCw } from 'lucide-react';
+
 export function PageHeader({
   title,
   description,
@@ -20,15 +22,24 @@ export function PageHeader({
   );
 }
 
-export function LiveIndicator({ active }: { active?: boolean }) {
+// Manual refresh — the dashboard doesn't auto-poll (keeps API/DB usage low on
+// free hosting). Click to refetch; the icon spins while a fetch is in flight.
+export function RefreshButton({
+  onClick,
+  spinning,
+}: {
+  onClick?: () => void;
+  spinning?: boolean;
+}) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground">
-      <span
-        className={`h-2 w-2 rounded-full ${
-          active ? 'animate-pulse bg-primary' : 'bg-border'
-        }`}
-      />
-      {active ? 'Refreshing' : 'Live · 10s'}
-    </span>
+    <button
+      onClick={onClick}
+      disabled={spinning}
+      title="Refresh"
+      className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-60"
+    >
+      <RefreshCw className={`h-3.5 w-3.5 ${spinning ? 'animate-spin' : ''}`} />
+      Refresh
+    </button>
   );
 }

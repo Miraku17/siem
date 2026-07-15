@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import type { Incident } from '@/lib/types';
-import { PageHeader, LiveIndicator } from '@/components/page-header';
+import { PageHeader, RefreshButton } from '@/components/page-header';
 import { SeverityBadge, StatusBadge } from '@/components/badges';
 import { Card } from '@/components/ui/card';
 import {
@@ -16,10 +16,9 @@ import {
 } from '@/components/ui/table';
 
 export default function IncidentsPage() {
-  const { data, isLoading, isError, isFetching } = useQuery({
+  const { data, isLoading, isError, isFetching, refetch } = useQuery({
     queryKey: ['incidents'],
     queryFn: () => api<Incident[]>('/incidents'),
-    refetchInterval: 15_000,
   });
 
   return (
@@ -28,7 +27,7 @@ export default function IncidentsPage() {
         title="Incidents"
         description="Grouped investigations under active case management."
       >
-        <LiveIndicator active={isFetching} />
+        <RefreshButton spinning={isFetching} onClick={() => refetch()} />
       </PageHeader>
 
       {isError && (

@@ -49,7 +49,6 @@ export function Sidebar() {
   const { data } = useQuery({
     queryKey: ['overview'],
     queryFn: () => api<Overview>('/overview'),
-    refetchInterval: 15_000,
   });
 
   const openTotal =

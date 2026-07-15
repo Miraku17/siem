@@ -6,7 +6,7 @@ import { Search } from 'lucide-react';
 import { api } from '@/lib/api';
 import type { SecurityEvent, Severity } from '@/lib/types';
 import { relativeTime } from '@/lib/format';
-import { PageHeader, LiveIndicator } from '@/components/page-header';
+import { PageHeader, RefreshButton } from '@/components/page-header';
 import { SeverityBadge, ApplicationBadge } from '@/components/badges';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -43,10 +43,9 @@ export default function EventsPage() {
   const [severity, setSeverity] = useState(ALL);
   const [eventType, setEventType] = useState(ALL);
 
-  const { data, isLoading, isError, isFetching } = useQuery({
+  const { data, isLoading, isError, isFetching, refetch } = useQuery({
     queryKey: ['events'],
     queryFn: () => api<SecurityEvent[]>('/events'),
-    refetchInterval: 10_000,
   });
 
   const apps = useMemo(() => {
@@ -96,7 +95,7 @@ export default function EventsPage() {
         title="Events"
         description="Live security event stream across all sources."
       >
-        <LiveIndicator active={isFetching} />
+        <RefreshButton spinning={isFetching} onClick={() => refetch()} />
       </PageHeader>
 
       {/* Filter toolbar */}

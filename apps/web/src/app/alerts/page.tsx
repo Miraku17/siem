@@ -7,7 +7,7 @@ import { ChevronRight, Search } from 'lucide-react';
 import { api } from '@/lib/api';
 import type { Alert, Severity } from '@/lib/types';
 import { relativeTime } from '@/lib/format';
-import { PageHeader, LiveIndicator } from '@/components/page-header';
+import { PageHeader, RefreshButton } from '@/components/page-header';
 import { SeverityBadge, StatusBadge } from '@/components/badges';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -52,10 +52,9 @@ export default function AlertsPage() {
   const [severity, setSeverity] = useState(ALL);
   const [status, setStatus] = useState(ALL);
 
-  const { data, isLoading, isError, isFetching } = useQuery({
+  const { data, isLoading, isError, isFetching, refetch } = useQuery({
     queryKey: ['alerts'],
     queryFn: () => api<Alert[]>('/alerts'),
-    refetchInterval: 10_000,
   });
 
   const rows = useMemo(() => {
@@ -84,7 +83,7 @@ export default function AlertsPage() {
         title="Alerts"
         description="Detections raised by the rule engine. Click a row to triage."
       >
-        <LiveIndicator active={isFetching} />
+        <RefreshButton spinning={isFetching} onClick={() => refetch()} />
       </PageHeader>
 
       {/* Filter toolbar */}
