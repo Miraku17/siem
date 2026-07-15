@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { DetectionService } from '../detection/detection.service';
 import { IngestEventDto } from './dto/ingest-event.dto';
 import { lookupGeo } from './geoip';
+import { lookupThreat } from './threat-intel';
 
 @Injectable()
 export class EventsService {
@@ -13,10 +14,23 @@ export class EventsService {
 
   // Normalize + persist an incoming event, then hand it to the detection engine.
   async ingest(dto: IngestEventDto, applicationId: string) {
-    // GeoIP enrichment — resolve country + coords from the IP. Source-provided
-    // metadata wins, so a sender that already knows the country isn't clobbered.
-    const geo = await lookupGeo(dto.ip);
-    const metadata = { ...geo, ...(dto.metadata ?? {}) };
+    // Enrich from the IP: GeoIP (country + coords) and threat-intel reputation,
+    // in parallel. Source-provided metadata wins, so a sender that already knows
+    // these isn't clobbered.
+    const [geo, threat] = await Promise.all([
+      lookupGeo(dto.ip),
+      lookupThreat(dto.ip),
+    ]);
+    const metadata: Record<string, unknown> = {
+      ...geo,
+      ...(dto.metadata ?? {}),
+    };
+    if (
+      !('threat' in metadata) &&
+      (threat.score != null || threat.listed != null)
+    ) {
+      metadata.threat = threat;
+    }
 
     const event = await this.prisma.securityEvent.create({
       data: {

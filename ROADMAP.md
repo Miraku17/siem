@@ -47,7 +47,10 @@ The engine runs every rule per ingested event; dedup suppresses duplicates.
       from the IP at ingestion (via ipwho.is, cached, private-IP aware, fully
       defensive). Populates the world map and activates `auth.new_country`.
       Source-provided `metadata.country` still wins.
-- [ ] IP reputation (AbuseIPDB / VirusTotal) — flag events from known-bad IPs.
+- [x] **IP reputation** — `apps/api/src/events/threat-intel.ts` scores each source
+      IP at ingestion (AbuseIPDB when `ABUSEIPDB_API_KEY` is set; keyless DNSBL
+      fallback otherwise). Result stored in `metadata.threat`; the
+      `intel.malicious_ip` rule alerts on flagged IPs (HIGH/CRITICAL).
 - [ ] Improve the status post (include like the payload, the file hash, like all request info important ones)
 ## 📡 More source events to emit (Bedrock)
 

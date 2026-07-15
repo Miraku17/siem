@@ -10,6 +10,7 @@ import { massExportRule } from './mass-export.rule';
 import { adminMfaResetRule } from './admin-mfa-reset.rule';
 import { mfaResetTakeoverRule } from './mfa-reset-takeover.rule';
 import { massUserRemovalRule } from './mass-user-removal.rule';
+import { maliciousIpRule } from './malicious-ip.rule';
 
 // Registered detection rules. Each is evaluated against every ingested event;
 // a match raises an alert (deduplicated per the rule's dedupe key).
@@ -25,4 +26,5 @@ export const DETECTION_RULES: DetectionRule[] = [
   adminMfaResetRule,
   mfaResetTakeoverRule,
   massUserRemovalRule,
+  maliciousIpRule,
 ];
