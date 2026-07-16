@@ -95,12 +95,13 @@ SIEM detection rule.
 
 ## 🟡 Dashboard
 
-- [ ] **Simplify the Events page** (`/events`) — the current table is confusing;
-      make it scannable at a glance (clearer columns/spacing, group or de-emphasize
-      low-signal fields, obvious threat/severity cues).
-- [ ] **Simplify the Alert detail page** (`/alerts/[id]`) — too much going on; cut
-      the noise so an analyst instantly sees what happened, why it matters, and what
-      to do. Fewer panels, clearer hierarchy.
+- [x] **Simplify the Events page** (`/events`) — trimmed to 6 grouped columns
+      (app under the event, location + threat score under the IP), dropped the
+      low-signal Endpoint column.
+- [x] **Simplify the Alert detail page** (`/alerts/[id]`) — reads what happened →
+      why it matters → recommended action, then a clean Event Details facts grid +
+      compact Activity timeline. Dropped the risk card, 4 context cards, and the
+      tabbed/searchable evidence panel.
 - [ ] **Investigation timeline** — `events/[id]` is still a placeholder; show the
       correlated event chain + resulting alert/incident.
 - [ ] **Search DSL** on Events (`event:LOGIN_FAILED ip:1.2.3.4 severity:HIGH`).

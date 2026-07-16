@@ -69,14 +69,7 @@ export default function EventsPage() {
       if (severity !== ALL && e.severity !== severity) return false;
       if (eventType !== ALL && e.eventType !== eventType) return false;
       if (term) {
-        const hay = [
-          e.eventType,
-          e.email,
-          e.userId,
-          e.ipAddress,
-          e.endpoint,
-          e.application?.name,
-        ]
+        const hay = [e.eventType, e.email, e.userId, e.ipAddress, e.application?.name]
           .filter(Boolean)
           .join(' ')
           .toLowerCase();
@@ -86,26 +79,25 @@ export default function EventsPage() {
     });
   }, [data, q, app, severity, eventType]);
 
-  const hasFilters =
-    q || app !== ALL || severity !== ALL || eventType !== ALL;
+  const hasFilters = q || app !== ALL || severity !== ALL || eventType !== ALL;
 
   return (
     <div className="space-y-5">
       <PageHeader
         title="Events"
-        description="Live security event stream across all sources."
+        description="Security event stream across all sources."
       >
         <RefreshButton spinning={isFetching} onClick={() => refetch()} />
       </PageHeader>
 
-      {/* Filter toolbar */}
+      {/* Filters */}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-[240px] flex-1">
+        <div className="relative min-w-[220px] flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search event, email, IP, endpoint…"
+            placeholder="Search event, email, IP…"
             className="pl-9"
           />
         </div>
@@ -146,7 +138,7 @@ export default function EventsPage() {
       <div className="text-xs text-muted-foreground">
         {isLoading
           ? 'Loading…'
-          : `Showing ${rows.length}${
+          : `${rows.length}${
               data && rows.length !== data.length ? ` of ${data.length}` : ''
             } event${rows.length === 1 ? '' : 's'}`}
       </div>
@@ -162,11 +154,9 @@ export default function EventsPage() {
               <TableHead>Time</TableHead>
               <TableHead>Severity</TableHead>
               <TableHead>Event</TableHead>
-              <TableHead>Application</TableHead>
               <TableHead>Actor</TableHead>
-              <TableHead>Source IP</TableHead>
-              <TableHead>Endpoint</TableHead>
-              <TableHead>Status</TableHead>
+              <TableHead>Source</TableHead>
+              <TableHead>Outcome</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -181,62 +171,64 @@ export default function EventsPage() {
                 }
               />
             ) : (
-              rows.map((e) => (
-                <TableRow
-                  key={e.id}
-                  className={`border-l-2 ${SEVERITY_ACCENT[e.severity]}`}
-                >
-                  <TableCell
-                    className="whitespace-nowrap text-muted-foreground"
-                    title={new Date(e.timestamp).toLocaleString()}
-                  >
-                    {relativeTime(e.timestamp)}
-                  </TableCell>
-                  <TableCell>
-                    <SeverityBadge severity={e.severity} />
-                  </TableCell>
-                  <TableCell className="font-medium">{e.eventType}</TableCell>
-                  <TableCell>
-                    {e.application ? (
-                      <ApplicationBadge
-                        name={e.application.name}
-                        slug={e.application.slug}
-                      />
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {e.email ?? e.userId ?? '—'}
-                  </TableCell>
-                  <TableCell className="whitespace-nowrap font-mono text-xs">
-                    <span className="inline-flex items-center gap-1.5">
-                      {e.ipAddress ?? '—'}
-                      <ThreatBadge metadata={e.metadata} />
-                    </span>
-                  </TableCell>
-                  <TableCell className="whitespace-nowrap text-muted-foreground">
-                    {e.endpoint ? (
-                      <span className="font-mono text-xs">
-                        {e.method && (
-                          <span className="mr-1 text-primary">{e.method}</span>
-                        )}
-                        {e.endpoint}
-                      </span>
-                    ) : (
-                      '—'
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <EventStatus event={e.eventType} code={e.statusCode} />
-                  </TableCell>
-                </TableRow>
-              ))
+              rows.map((e) => <Row key={e.id} e={e} />)
             )}
           </TableBody>
         </Table>
       </Card>
     </div>
+  );
+}
+
+function Row({ e }: { e: SecurityEvent }) {
+  const meta = (e.metadata ?? {}) as Record<string, any>;
+  const place = [meta.city, meta.country].filter(Boolean).join(', ');
+  return (
+    <TableRow className={`border-l-2 ${SEVERITY_ACCENT[e.severity]}`}>
+      <TableCell
+        className="whitespace-nowrap text-muted-foreground"
+        title={new Date(e.timestamp).toLocaleString()}
+      >
+        {relativeTime(e.timestamp)}
+      </TableCell>
+      <TableCell>
+        <SeverityBadge severity={e.severity} />
+      </TableCell>
+      <TableCell>
+        <div className="font-medium">{e.eventType}</div>
+        {e.application && (
+          <div className="mt-1">
+            <ApplicationBadge
+              name={e.application.name}
+              slug={e.application.slug}
+            />
+          </div>
+        )}
+      </TableCell>
+      <TableCell className="text-muted-foreground">
+        {e.email ?? e.userId ?? '—'}
+      </TableCell>
+      <TableCell>
+        {e.ipAddress ? (
+          <>
+            <div className="flex items-center gap-1.5 font-mono text-xs">
+              {e.ipAddress}
+              <ThreatBadge metadata={e.metadata} />
+            </div>
+            {place && (
+              <div className="mt-0.5 text-[11px] text-muted-foreground">
+                {place}
+              </div>
+            )}
+          </>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        )}
+      </TableCell>
+      <TableCell>
+        <EventStatus event={e.eventType} code={e.statusCode} />
+      </TableCell>
+    </TableRow>
   );
 }
 
@@ -253,7 +245,7 @@ function FilterSelect({
 }) {
   return (
     <Select value={value} onValueChange={onChange}>
-      <SelectTrigger className="w-[180px]">
+      <SelectTrigger className="w-[170px]">
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
       <SelectContent>
@@ -268,11 +260,10 @@ function FilterSelect({
   );
 }
 
-// Events without an HTTP status code (LOGOUT, MFA_*, ROLE_CHANGED, DATA_EXPORT…)
-// aren't HTTP requests, so derive a Failed/OK outcome from the event type
-// instead of leaving the cell blank.
 const FAILURE_EVENT = /(FAILED|DENIED|INVALID|LOCKED|SUSPICIOUS|ERROR|RATE_LIMIT|BLOCKED)/;
 
+// Meaningful outcome for every event: HTTP code when present, else a
+// Failed/OK derived from the event type (non-HTTP events have no code).
 function EventStatus({ event, code }: { event: string; code: number | null }) {
   if (code != null) {
     const color =
@@ -297,8 +288,7 @@ function EventStatus({ event, code }: { event: string; code: number | null }) {
   );
 }
 
-// IP reputation badge from threat-intel enrichment (metadata.threat). Only shown
-// when the IP has a non-zero score or is blocklisted; clean IPs stay uncluttered.
+// IP reputation badge from threat-intel enrichment; only shown when flagged.
 function ThreatBadge({ metadata }: { metadata?: Record<string, unknown> | null }) {
   const threat = (metadata as any)?.threat as
     | { score?: number; listed?: boolean }
@@ -327,10 +317,7 @@ function ThreatBadge({ metadata }: { metadata?: Record<string, unknown> | null }
 function Empty({ text }: { text: string }) {
   return (
     <TableRow className="hover:bg-transparent">
-      <TableCell
-        colSpan={8}
-        className="py-12 text-center text-muted-foreground"
-      >
+      <TableCell colSpan={6} className="py-12 text-center text-muted-foreground">
         {text}
       </TableCell>
     </TableRow>
