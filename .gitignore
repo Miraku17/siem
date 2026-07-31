@@ -20,3 +20,4 @@ apps/api/prisma/migrations/dev.db*
 .DS_Store
 coverage/
 .turbo/
+*.tsbuildinfo

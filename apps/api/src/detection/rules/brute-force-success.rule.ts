@@ -14,11 +14,12 @@ export const bruteForceSuccessRule: DetectionRule = {
 
     const fails = await prisma.securityEvent.count({
       where: {
+        applicationId: event.applicationId,
         eventType: 'LOGIN_FAILED',
         ipAddress: event.ipAddress,
-        timestamp: {
-          gte: new Date(event.timestamp.getTime() - 10 * 60_000),
-          lt: event.timestamp,
+        createdAt: {
+          gte: new Date(event.createdAt.getTime() - 10 * 60_000),
+          lt: event.createdAt,
         },
       },
     });

@@ -16,10 +16,11 @@ export const mfaResetTakeoverRule: DetectionRule = {
     // An ADMIN_MFA_RESET targeting THIS user in the last 6 hours.
     const reset = await prisma.securityEvent.findFirst({
       where: {
+        applicationId: event.applicationId,
         eventType: 'ADMIN_MFA_RESET',
-        timestamp: {
-          gte: new Date(event.timestamp.getTime() - 6 * 3600_000),
-          lt: event.timestamp,
+        createdAt: {
+          gte: new Date(event.createdAt.getTime() - 6 * 3600_000),
+          lt: event.createdAt,
         },
         metadata: { path: ['targetUserId'], equals: event.userId },
       },

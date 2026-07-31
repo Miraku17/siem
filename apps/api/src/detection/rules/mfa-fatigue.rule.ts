@@ -14,9 +14,10 @@ export const mfaFatigueRule: DetectionRule = {
 
     const count = await prisma.securityEvent.count({
       where: {
+        applicationId: event.applicationId,
         eventType: 'MFA_FAILED',
         userId: event.userId,
-        timestamp: { gte: new Date(event.timestamp.getTime() - 10 * 60_000) },
+        createdAt: { gte: new Date(event.createdAt.getTime() - 10 * 60_000) },
       },
     });
 

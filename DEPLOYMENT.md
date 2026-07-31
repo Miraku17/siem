@@ -16,6 +16,23 @@ The API runs as a Vercel serverless function (see `apps/api/api/index.ts` +
 Deploy order matters: **Neon → API (Vercel) → Web (Vercel)**, because the web
 build needs the API's URL, and the API needs the database URL.
 
+> ### ⚠️ Breaking changes in the API-key migration
+>
+> Migration `20260801000000_hash_application_api_keys` replaces the plaintext
+> `applications.apiKey` column with a SHA-256 digest (`apiKeyHash`) plus a
+> display `keyPrefix`.
+>
+> - **Existing keys keep working.** The migration hashes them in place, so live
+>   senders (Bedrock) need no change and no redeploy.
+> - **Existing keys become unreadable.** After it runs, no one — including you —
+>   can read a key back out of the database or the dashboard. Copy any key you
+>   still need *before* deploying. Losing one means registering a new
+>   application to issue a replacement.
+> - **`JWT_SECRET` is now mandatory.** The API refuses to start without a real
+>   one (previously it silently fell back to `change-me`). Confirm it is set on
+>   the API project before deploying, or the deployment will fail to boot.
+>   Generate one with `openssl rand -hex 32`.
+
 ---
 
 ## 0. Code changes — already done ✅

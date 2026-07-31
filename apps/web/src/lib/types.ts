@@ -1,5 +1,19 @@
 export type Severity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 
+// Server-side pagination envelope (e.g. GET /events).
+export interface Paginated<T> {
+  items: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+// Options for the events page filter dropdowns (GET /events/facets).
+export interface EventFacets {
+  eventTypes: string[];
+  applications: { name: string; slug: string }[];
+}
+
 export interface SecurityEvent {
   id: string;
   applicationId: string;
@@ -68,7 +82,9 @@ export interface Application {
   id: string;
   name: string;
   slug: string;
-  apiKey: string;
+  // The full key is never returned by the API — only its display prefix.
+  // `apiKey` appears once, in the response to registering a new application.
+  keyPrefix: string;
   status: string;
   createdAt: string;
 }

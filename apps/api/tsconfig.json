@@ -20,5 +20,7 @@
     "noFallthroughCasesInSwitch": false,
     "esModuleInterop": true
   },
-  "exclude": ["node_modules", "dist", "api", "prisma", "test"]
+  // Specs live beside the code they test but are compiled by tsconfig.spec.json,
+  // not shipped in the build.
+  "exclude": ["node_modules", "dist", "api", "prisma", "test", "**/*.spec.ts"]
 }
