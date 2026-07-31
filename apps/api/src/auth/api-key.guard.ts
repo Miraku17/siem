@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
+import { hashApiKey } from './api-key.util';
 
 // Authenticates applications via "Authorization: Bearer sk_live_..." and
 // attaches the resolved applicationId to the request.
@@ -20,7 +21,11 @@ export class ApiKeyGuard implements CanActivate {
 
     if (!apiKey) throw new UnauthorizedException('Missing API key');
 
-    const app = await this.prisma.application.findUnique({ where: { apiKey } });
+    // Look the key up by digest — the plaintext is never stored, so a database
+    // dump yields nothing that can be replayed against this endpoint.
+    const app = await this.prisma.application.findUnique({
+      where: { apiKeyHash: hashApiKey(apiKey) },
+    });
     if (!app || app.status !== 'ACTIVE') {
       throw new UnauthorizedException('Invalid API key');
     }

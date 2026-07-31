@@ -1,8 +1,7 @@
 'use client';
 
-import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AppWindow, Copy, Check } from 'lucide-react';
+import { AppWindow } from 'lucide-react';
 import { api } from '@/lib/api';
 import type { Application } from '@/lib/types';
 import { appColor } from '@/lib/format';
@@ -57,14 +56,7 @@ export default function ApplicationsPage() {
 }
 
 function AppCard({ app }: { app: Application }) {
-  const [copied, setCopied] = useState(false);
   const c = appColor(app.slug);
-
-  const copy = () => {
-    navigator.clipboard.writeText(app.apiKey);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  };
 
   return (
     <Card>
@@ -91,20 +83,16 @@ function AppCard({ app }: { app: Application }) {
         <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
           API Key
         </div>
-        <button
-          onClick={copy}
-          className="mt-1 flex w-full items-center justify-between gap-2 rounded-md border border-border bg-background px-2.5 py-1.5 text-left transition-colors hover:bg-accent"
-          title="Copy API key"
-        >
+        {/* Only the prefix exists server-side — the key is hashed at rest and
+            shown in full exactly once, when the application is registered. */}
+        <div className="mt-1 flex w-full items-center gap-2 rounded-md border border-border bg-background px-2.5 py-1.5">
           <code className="truncate font-mono text-xs text-muted-foreground">
-            {app.apiKey}
+            {app.keyPrefix}…
           </code>
-          {copied ? (
-            <Check className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
-          ) : (
-            <Copy className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-          )}
-        </button>
+          <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">
+            hashed
+          </span>
+        </div>
       </CardContent>
     </Card>
   );

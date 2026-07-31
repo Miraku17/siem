@@ -108,22 +108,68 @@ SIEM detection rule.
 - [ ] Applications page: per-app metrics (events today, alerts, failed logins, traffic).
 - [ ] User risk scoring (aggregate signal per user/account).
 
+## ✅ Correctness & authorization hardening — DONE (2026-08-01)
+
+Fixes for defects found auditing the engine against the docs. All covered by
+tests (`npm test` in `apps/api`, 63 tests against a real Postgres).
+
+- [x] **Correlation is scoped per application.** No rule filtered on
+      `applicationId`, so every windowed/novelty query ran across all tenants:
+      one app's failed logins inflated another's brute-force count, and a
+      `userId` shared between apps (`usr_123`) made one tenant's history
+      suppress the other's new-IP / new-country / takeover alerts. All 9
+      correlating rules now scope by `applicationId`.
+- [x] **Alert dedup is scoped per application** (`detection.service.ts`) — the
+      same attacker IP hitting two apps used to raise one alert, not two.
+- [x] **Detection windows use `createdAt`, not the sender's `timestamp`.**
+      Every window keyed off client-supplied `timestamp`, so anyone holding an
+      API key could evade all time-based rules by backdating events. Windows now
+      use the server-assigned ingestion time; `timestamp` remains for display.
+- [x] **Enrichment outranks source metadata.** `metadata.threat` is stripped
+      from the payload and only ever written by threat-intel; resolved GeoIP
+      overwrites a sender-claimed `country`. Previously a compromised app could
+      silence `intel.malicious_ip` and `auth.new_country` on itself.
+- [x] **Roles are enforced** — `RolesGuard` + `@Roles()`. `UserRole` existed but
+      nothing read it, so a VIEWER could mutate alerts and register applications
+      (minting live ingestion keys). Registration is ADMIN-only; alert triage is
+      ADMIN/ANALYST; reads stay open to any authenticated user.
+- [x] **API keys are hashed at rest** (SHA-256) with a `keyPrefix` for display.
+      Shown once at registration; the dashboard shows the prefix. Existing keys
+      migrated in place.
+- [x] **`JWT_SECRET` is validated at startup** — no more `?? 'change-me'`
+      fallback, and `JwtGuard` no longer verifies against a different value than
+      `JwtModule` signs with.
+- [x] **`POST /applications` has a validated DTO** (was an untyped inline body,
+      so the global `ValidationPipe` enforced nothing).
+- [x] **Seed no longer ships a fixed password** — uses `SEED_ADMIN_PASSWORD` or
+      generates one and prints it once.
+- [x] **Test harness** — Jest against a real Postgres (`docker compose up -d
+      postgres`), refuses to run unless `DATABASE_URL` is local.
+
 ## 🟢 Hardening / ops
 
 - [ ] Move detection off the request path onto **BullMQ + Redis** (already in
       `docker-compose.yml`, unused) so ingestion stays fast under load.
 - [ ] Rate-limit the ingestion endpoint.
 - [ ] Pagination on all list endpoints (events/alerts/incidents).
-- [ ] API tests (Jest is set up) for guards, ingestion, and each rule.
+- [x] API tests (Jest + real Postgres) for guards, ingestion, dedup, and the
+      correlating rules. Still to cover: the stateless rules
+      (`privilege_escalation`, `admin_mfa_reset`, `malicious_ip`), auth login,
+      and the events search/facets endpoints.
 - [ ] Retention policy (e.g. raw events 30–90d, alerts longer).
 - [ ] Dockerfiles for `api` + `web`.
 
 ## 🔒 Security hygiene (do before "real")
 
-- [ ] **Change the seeded admin password** — still `admin1234` in prod.
+- [x] **Seed no longer hardcodes a password** (`SEED_ADMIN_PASSWORD` or a
+      generated one). ⚠️ The already-seeded prod admin still has `admin1234` —
+      change it in the database; re-seeding will not.
 - [ ] **Rotate the Neon DB password** — it was exposed during setup; update
       `apps/api/.env` + the API project's `DATABASE_URL`/`DIRECT_URL`.
 - [ ] Restrict CORS: confirm `WEB_ORIGIN` is set on the deployed API.
+- [ ] JWT lives in `localStorage`, so any XSS on the dashboard exfiltrates a
+      session. Consider an httpOnly cookie.
+- [ ] No audit trail on analyst actions — `PATCH /alerts/:id` records no actor.
 - [ ] Add a real user-management flow (invite / roles) instead of a single seeded admin.
 
 ## ⚪ Later / stretch

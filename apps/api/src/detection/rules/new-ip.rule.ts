@@ -20,10 +20,11 @@ export const newIpRule: DetectionRule = {
 
     const priorSameIp = await prisma.securityEvent.count({
       where: {
+        applicationId: event.applicationId,
         userId: event.userId,
         ipAddress: event.ipAddress,
         id: { not: event.id },
-        timestamp: { lt: event.timestamp },
+        createdAt: { lt: event.createdAt },
       },
     });
     if (priorSameIp > 0) return null;
@@ -31,10 +32,11 @@ export const newIpRule: DetectionRule = {
     // Skip the very first login for an account (nothing to compare against).
     const priorLogins = await prisma.securityEvent.count({
       where: {
+        applicationId: event.applicationId,
         userId: event.userId,
         eventType: 'LOGIN_SUCCESS',
         id: { not: event.id },
-        timestamp: { lt: event.timestamp },
+        createdAt: { lt: event.createdAt },
       },
     });
     if (priorLogins === 0) return null;

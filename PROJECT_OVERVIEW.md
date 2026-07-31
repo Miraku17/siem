@@ -31,7 +31,10 @@ and exposes a SOC (Security Operations Center) dashboard for investigation.
 
 Two auth surfaces:
 - **API Keys** (`sk_live_...`) authenticate *applications* sending events (ingestion).
-- **JWT** authenticates *dashboard users* (SOC analysts) reading data.
+  Stored as a SHA-256 digest — the plaintext is shown once at registration and
+  never persisted.
+- **JWT** authenticates *dashboard users* (SOC analysts) reading data, with
+  `@Roles()` on anything that mutates state or issues credentials.
 
 ---
 
@@ -79,15 +82,21 @@ siem-platform/
 
 Base URL: `http://localhost:4000` — all routes are prefixed with `/api/v1`.
 
-| Method | Path                     | Auth     | Description |
-| ------ | ------------------------ | -------- | ----------- |
-| `POST` | `/api/v1/events`         | API Key  | Ingest a security event from an application |
-| `GET`  | `/api/v1/events`         | JWT      | Search / filter events for the dashboard |
-| `GET`  | `/api/v1/alerts`         | JWT      | List all alerts |
-| `GET`  | `/api/v1/alerts/:id`     | JWT      | Get a single alert |
-| `GET`  | `/api/v1/incidents`      | JWT      | List all incidents |
-| `GET`  | `/api/v1/applications`   | JWT      | List registered applications |
-| `POST` | `/api/v1/applications`   | JWT      | Register a new application (issues an API key) |
+| Method  | Path                          | Auth                    | Description |
+| ------- | ----------------------------- | ----------------------- | ----------- |
+| `POST`  | `/api/v1/auth/login`          | —                       | Exchange email + password for a JWT |
+| `GET`   | `/api/v1/auth/me`             | JWT                     | Current user from the token |
+| `POST`  | `/api/v1/events`              | API Key                 | Ingest a security event from an application |
+| `GET`   | `/api/v1/events`              | JWT                     | Paginated search / filter for the dashboard |
+| `GET`   | `/api/v1/events/facets`       | JWT                     | Distinct event types + applications (filter dropdowns) |
+| `GET`   | `/api/v1/overview`            | JWT                     | Aggregates for the Overview dashboard |
+| `GET`   | `/api/v1/alerts`              | JWT                     | List all alerts |
+| `GET`   | `/api/v1/alerts/:id`          | JWT                     | Get a single alert |
+| `PATCH` | `/api/v1/alerts/:id`          | JWT · **ADMIN/ANALYST** | Update workflow status / triage disposition |
+| `POST`  | `/api/v1/alerts/:id/comments` | JWT · **ADMIN/ANALYST** | Add an analyst comment |
+| `GET`   | `/api/v1/incidents`           | JWT                     | List all incidents |
+| `GET`   | `/api/v1/applications`        | JWT                     | List registered applications (prefix only, never the key) |
+| `POST`  | `/api/v1/applications`        | JWT · **ADMIN**         | Register an application; response carries the key **once** |
 
 **Auth headers**
 - API Key: `Authorization: Bearer sk_live_xxxxxxxxxxxx`
@@ -122,7 +131,8 @@ Response: `{ "success": true }` (HTTP 201)
 
 ## Data Model (Prisma)
 
-- **Application** — a registered source app; holds `slug` + unique `apiKey`, `status`.
+- **Application** — a registered source app; holds `slug`, a unique `apiKeyHash`
+  (SHA-256 of the issued key) and a display `keyPrefix`, plus `status`.
 - **SecurityEvent** — a normalized event (type, severity, actor, IP, endpoint, metadata, timestamps).
 - **Alert** — raised by a detection rule; has severity, status, and links to the triggering event/incident.
 - **Incident** — a grouping of alerts under investigation; has status, priority, assignee.
@@ -146,12 +156,27 @@ recognized catalog (`apps/api/src/events/event-types.ts`):
 
 ## Detection Engine
 
-Rule-based. Each ingested event is evaluated against the registered rules; a match
-creates an Alert. Rules live in `apps/api/src/detection/rules/`.
+Rule-based. Each ingested event is evaluated against every registered rule; a
+match creates an Alert, deduplicated per rule + entity. Rules live in
+`apps/api/src/detection/rules/` and are registered in `rules/index.ts`. See
+`ROADMAP.md` for the full list of the 12 shipped rules.
 
-**Implemented rule — `auth.brute_force`:**
-- 5+ `LOGIN_FAILED` from the same IP within 60s → **MEDIUM** ("Repeated failed logins")
-- 50+ `LOGIN_FAILED` from the same IP within 5m → **CRITICAL** ("Credential stuffing / brute force")
+Two invariants every correlating rule must hold — both were violated and are now
+covered by tests in `rules/tenant-isolation.spec.ts`:
+
+1. **Scope every query by `applicationId`.** Applications are separate tenants.
+   Unscoped correlation both over-counts (one app's failures inflating another's
+   brute-force threshold) and under-fires (one app's history making a
+   never-seen-before IP look familiar to another).
+2. **Window on `createdAt`, never `timestamp`.** `timestamp` is supplied by the
+   sender and is display-only; a caller holding an API key can set it freely and
+   would otherwise slip straight through every time-based rule. `createdAt` is
+   assigned by the SIEM at ingestion.
+
+Enrichment fields follow the same trust rule: `metadata.threat` is stripped from
+inbound payloads and written only by threat-intel, and resolved GeoIP overwrites
+a sender-claimed `country` — otherwise a source app could silence the rules that
+key off them.
 
 ---
 
@@ -214,22 +239,38 @@ Default services: Web `:3000`, API `:4000`, Postgres `:5432`, Redis `:6379`.
 
 ---
 
+## Testing
+
+```bash
+docker compose up -d postgres    # from the repo root
+cd apps/api && npm test
+```
+
+Specs run against a real Postgres (`siem_test`), not a mocked Prisma — the
+behaviour under test is largely the SQL itself (tenant filtering, JSON path
+matching, time windows). `test/load-env.ts` loads `.env.test` and refuses to run
+if `DATABASE_URL` is not local, so a stray `.env` can't point the suite at Neon.
+
 ## Current Status
 
 Working:
-- Event ingestion via API key (`POST /api/v1/events`)
-- Normalization + persistence (Prisma/Postgres)
-- Rule-based detection engine (brute-force rule) → alerts
-- Dashboard UI shell (overview, alerts, incidents, events, applications)
+- Event ingestion via API key (`POST /api/v1/events`), hashed keys
+- Normalization + GeoIP / threat-intel enrichment + persistence
+- Detection engine — 12 rules, per-application correlation, alert dedup
+- Dashboard auth (JWT login + route guard) with role enforcement
+- Dashboard: overview, alerts + alert detail/triage, incidents, events, applications
 - Client SDK
+- Deployed: Neon + Vercel (API) + Vercel (web)
 
-Not yet wired:
-- **Dashboard auth.** Read endpoints are JWT-guarded, but there is no login/token
-  flow and the web API client sends no `Authorization` header
-  (`apps/web/src/lib/api.ts` — `// Wire auth token handling as needed`). As a result
-  the dashboard renders but its data panels return 401 until auth is implemented.
-- Redis/BullMQ are provisioned in Docker but not used by the app yet.
+Known gaps (see `ROADMAP.md` for the full list):
+- **Incidents are inert** — the page and model exist, but nothing groups alerts
+  into them yet.
+- **Enrichment and detection run on the ingestion request path**, including
+  outbound HTTP/DNS lookups. Redis/BullMQ are provisioned in Docker but unused.
+- **No pagination on `/alerts` and `/incidents`** (events are paginated).
+- **No audit trail** on analyst actions — `PATCH /alerts/:id` records no actor.
+- No rate limit on ingestion; no retention policy; no CI.
 
-Roadmap (from `README.md`): Search DSL (`event:LOGIN_FAILED ip:1.2.3.4 severity:HIGH`),
-integrations (VirusTotal, AbuseIPDB, MaxMind GeoLite2, Slack/Discord/Email), MITRE ATT&CK
-mapping, IOC management, Sigma rules, user risk scoring.
+Roadmap: Search DSL (`event:LOGIN_FAILED ip:1.2.3.4 severity:HIGH`),
+notifications (Slack/Discord/Email), MITRE ATT&CK mapping, IOC management,
+Sigma rules, user risk scoring.

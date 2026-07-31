@@ -20,11 +20,12 @@ export const takeoverChainRule: DetectionRule = {
     // A password reset for this user in the last 6 hours.
     const reset = await prisma.securityEvent.findFirst({
       where: {
+        applicationId: event.applicationId,
         eventType: 'PASSWORD_RESET',
         userId: event.userId,
-        timestamp: {
-          gte: new Date(event.timestamp.getTime() - 6 * 3600_000),
-          lt: event.timestamp,
+        createdAt: {
+          gte: new Date(event.createdAt.getTime() - 6 * 3600_000),
+          lt: event.createdAt,
         },
       },
       select: { id: true },
@@ -34,10 +35,11 @@ export const takeoverChainRule: DetectionRule = {
     // ...and this IP has never been seen for the account before now.
     const seenBefore = await prisma.securityEvent.count({
       where: {
+        applicationId: event.applicationId,
         userId: event.userId,
         ipAddress: event.ipAddress,
         id: { not: event.id },
-        timestamp: { lt: event.timestamp },
+        createdAt: { lt: event.createdAt },
       },
     });
     if (seenBefore > 0) return null;

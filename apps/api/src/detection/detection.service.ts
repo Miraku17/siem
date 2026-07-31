@@ -20,7 +20,10 @@ export class DetectionService {
         const match = await rule.evaluate(event, this.prisma);
         if (!match) continue;
 
-        if (match.dedupe && (await this.isDuplicate(rule.id, match.dedupe))) {
+        if (
+          match.dedupe &&
+          (await this.isDuplicate(rule.id, match.dedupe, event.applicationId))
+        ) {
           this.logger.debug(
             `Deduped ${rule.id} for ${match.dedupe.field}=${match.dedupe.value}`,
           );
@@ -44,14 +47,21 @@ export class DetectionService {
   }
 
   // A duplicate = a recent alert from the same rule whose triggering event
-  // shares the dedupe entity (same IP / user / email).
-  private async isDuplicate(ruleId: string, dedupe: DedupeKey): Promise<boolean> {
+  // shares the dedupe entity (same IP / user / email) *within the same
+  // application*. Without the application scope, one tenant's alert would
+  // silently suppress another tenant's — the same attacker IP hitting two apps
+  // is two incidents, not one.
+  private async isDuplicate(
+    ruleId: string,
+    dedupe: DedupeKey,
+    applicationId: string,
+  ): Promise<boolean> {
     const windowMs = dedupe.windowMs ?? DEFAULT_COOLDOWN_MS;
     const existing = await this.prisma.alert.findFirst({
       where: {
         ruleId,
         createdAt: { gte: new Date(Date.now() - windowMs) },
-        event: { is: { [dedupe.field]: dedupe.value } as any },
+        event: { is: { applicationId, [dedupe.field]: dedupe.value } as any },
       },
       select: { id: true },
     });

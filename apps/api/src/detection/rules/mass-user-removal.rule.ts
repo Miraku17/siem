@@ -26,9 +26,10 @@ export const massUserRemovalRule: DetectionRule = {
 
     const count = await prisma.securityEvent.count({
       where: {
+        applicationId: event.applicationId,
         eventType: 'USER_DELETED',
         [field]: value,
-        timestamp: { gte: new Date(event.timestamp.getTime() - 10 * 60_000) },
+        createdAt: { gte: new Date(event.createdAt.getTime() - 10 * 60_000) },
       } as any,
     });
 

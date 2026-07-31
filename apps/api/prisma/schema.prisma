@@ -70,12 +70,15 @@ enum UserRole {
 // ── Models ─────────────────────────────────────────────────
 
 model Application {
-  id        String            @id @default(cuid())
-  name      String
-  slug      String            @unique // e.g. "velocity-pickleball"
-  apiKey    String            @unique
-  status    ApplicationStatus @default(ACTIVE)
-  createdAt DateTime          @default(now())
+  id   String @id @default(cuid())
+  name String
+  slug String @unique // e.g. "velocity-pickleball"
+  // SHA-256 of the issued key. The plaintext is shown once at registration and
+  // never stored, so a database dump can't be used to impersonate a source app.
+  apiKeyHash String            @unique
+  keyPrefix  String // first chars of the key, for display ("sk_live_a1b2c3…")
+  status     ApplicationStatus @default(ACTIVE)
+  createdAt  DateTime          @default(now())
 
   events SecurityEvent[]
 
@@ -101,6 +104,7 @@ model SecurityEvent {
   application Application @relation(fields: [applicationId], references: [id])
   alerts      Alert[]
 
+  @@index([timestamp]) // paginated event list orders by timestamp with no filter
   @@index([applicationId, timestamp])
   @@index([eventType, timestamp])
   @@index([ipAddress])

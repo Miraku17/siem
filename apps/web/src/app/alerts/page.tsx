@@ -1,9 +1,9 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronRight, Search } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import { api } from '@/lib/api';
 import type { Alert, Severity } from '@/lib/types';
 import { relativeTime } from '@/lib/format';
@@ -31,6 +31,7 @@ import {
 const SEVERITIES: Severity[] = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
 const STATUSES = ['OPEN', 'ACKNOWLEDGED', 'RESOLVED', 'FALSE_POSITIVE'];
 const ALL = '__all__';
+const PAGE_SIZE = 15;
 
 const SEVERITY_ACCENT: Record<Severity, string> = {
   LOW: 'border-l-severity-low',
@@ -51,6 +52,7 @@ export default function AlertsPage() {
   const [q, setQ] = useState('');
   const [severity, setSeverity] = useState(ALL);
   const [status, setStatus] = useState(ALL);
+  const [page, setPage] = useState(1);
 
   const { data, isLoading, isError, isFetching, refetch } = useQuery({
     queryKey: ['alerts'],
@@ -76,6 +78,18 @@ export default function AlertsPage() {
 
   const openCount = data?.filter((a) => a.status === 'OPEN').length ?? 0;
   const hasFilters = q || severity !== ALL || status !== ALL;
+
+  // Reset to the first page whenever the filtered result set changes.
+  useEffect(() => {
+    setPage(1);
+  }, [q, severity, status]);
+
+  const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const pageRows = rows.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE,
+  );
 
   return (
     <div className="space-y-5">
@@ -166,7 +180,7 @@ export default function AlertsPage() {
                 }
               />
             ) : (
-              rows.map((a) => (
+              pageRows.map((a) => (
                 <TableRow
                   key={a.id}
                   onClick={() => router.push(`/alerts/${a.id}`)}
@@ -211,6 +225,38 @@ export default function AlertsPage() {
           </TableBody>
         </Table>
       </Card>
+
+      {!isLoading && rows.length > PAGE_SIZE && (
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span>
+            Showing {(currentPage - 1) * PAGE_SIZE + 1}–
+            {Math.min(currentPage * PAGE_SIZE, rows.length)} of {rows.length}
+          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={currentPage <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
+              <ChevronLeft className="mr-1 h-4 w-4" />
+              Prev
+            </Button>
+            <span className="tabular-nums">
+              Page {currentPage} of {pageCount}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={currentPage >= pageCount}
+              onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+            >
+              Next
+              <ChevronRight className="ml-1 h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

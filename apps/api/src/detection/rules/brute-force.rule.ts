@@ -15,9 +15,10 @@ export const bruteForceRule: DetectionRule = {
     const count = async (windowMs: number) =>
       prisma.securityEvent.count({
         where: {
+          applicationId: event.applicationId,
           eventType: 'LOGIN_FAILED',
           ipAddress: event.ipAddress,
-          timestamp: { gte: new Date(event.timestamp.getTime() - windowMs) },
+          createdAt: { gte: new Date(event.createdAt.getTime() - windowMs) },
         },
       });
 

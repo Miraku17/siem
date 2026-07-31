@@ -23,18 +23,20 @@ export const newCountryRule: DetectionRule = {
     // Only meaningful once the user has history — a first-ever login isn't "new".
     const priorAny = await prisma.securityEvent.count({
       where: {
+        applicationId: event.applicationId,
         userId: event.userId,
         id: { not: event.id },
-        timestamp: { lt: event.timestamp },
+        createdAt: { lt: event.createdAt },
       },
     });
     if (priorAny === 0) return null;
 
     const priorInCountry = await prisma.securityEvent.count({
       where: {
+        applicationId: event.applicationId,
         userId: event.userId,
         id: { not: event.id },
-        timestamp: { lt: event.timestamp },
+        createdAt: { lt: event.createdAt },
         metadata: { path: ['country'], equals: country },
       },
     });

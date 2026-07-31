@@ -8,6 +8,7 @@
     "packages/*"
   ],
   "scripts": {
+    "test": "npm --workspace apps/api run test",
     "dev:api": "npm --workspace apps/api run start:dev",
     "dev:web": "npm --workspace apps/web run dev",
     "infra:up": "docker compose up -d",

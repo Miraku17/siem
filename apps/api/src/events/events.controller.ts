@@ -18,10 +18,17 @@ export class EventsController {
     return { success: true };
   }
 
-  // Dashboard reads events (search / filter). Protected by JWT.
+  // Dashboard reads events (paginated search / filter). Protected by JWT.
   @Get()
   @UseGuards(JwtGuard)
   async list(@Query() query: Record<string, string>) {
     return this.events.search(query);
+  }
+
+  // Filter-dropdown options (distinct event types + applications).
+  @Get('facets')
+  @UseGuards(JwtGuard)
+  async facets() {
+    return this.events.facets();
   }
 }

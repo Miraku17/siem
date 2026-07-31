@@ -1,10 +1,10 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Search, ShieldAlert } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { ChevronLeft, ChevronRight, Search, ShieldAlert } from 'lucide-react';
 import { api } from '@/lib/api';
-import type { SecurityEvent, Severity } from '@/lib/types';
+import type { EventFacets, Paginated, SecurityEvent, Severity } from '@/lib/types';
 import { relativeTime } from '@/lib/format';
 import { PageHeader, RefreshButton } from '@/components/page-header';
 import { SeverityBadge, ApplicationBadge } from '@/components/badges';
@@ -37,47 +37,60 @@ const SEVERITY_ACCENT: Record<Severity, string> = {
   CRITICAL: 'border-l-severity-critical',
 };
 
+const PAGE_SIZE = 25;
+
+// Debounce the free-text search so typing doesn't fire a request per keystroke.
+function useDebounced<T>(value: T, ms = 300): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), ms);
+    return () => clearTimeout(t);
+  }, [value, ms]);
+  return debounced;
+}
+
 export default function EventsPage() {
   const [q, setQ] = useState('');
   const [app, setApp] = useState(ALL);
   const [severity, setSeverity] = useState(ALL);
   const [eventType, setEventType] = useState(ALL);
+  const [page, setPage] = useState(1);
+  const dq = useDebounced(q.trim());
+
+  // Any filter change restarts from page 1.
+  useEffect(() => {
+    setPage(1);
+  }, [dq, app, severity, eventType]);
+
+  const params = new URLSearchParams({ page: String(page), pageSize: String(PAGE_SIZE) });
+  if (dq) params.set('q', dq);
+  if (app !== ALL) params.set('application', app);
+  if (severity !== ALL) params.set('severity', severity);
+  if (eventType !== ALL) params.set('eventType', eventType);
 
   const { data, isLoading, isError, isFetching, refetch } = useQuery({
-    queryKey: ['events'],
-    queryFn: () => api<SecurityEvent[]>('/events'),
+    queryKey: ['events', page, dq, app, severity, eventType],
+    queryFn: () => api<Paginated<SecurityEvent>>(`/events?${params}`),
+    placeholderData: keepPreviousData, // keep the table stable while a page loads
   });
 
-  const apps = useMemo(() => {
-    const map = new Map<string, string>();
-    data?.forEach((e) => {
-      if (e.application) map.set(e.application.slug, e.application.name);
-    });
-    return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1]));
-  }, [data]);
+  const { data: facets } = useQuery({
+    queryKey: ['event-facets'],
+    queryFn: () => api<EventFacets>('/events/facets'),
+  });
 
-  const eventTypes = useMemo(
-    () => [...new Set(data?.map((e) => e.eventType) ?? [])].sort(),
-    [data],
-  );
+  const rows = data?.items ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  // The page the visible rows belong to — with keepPreviousData the previous
+  // page stays on screen while the next one loads, so the counter must follow
+  // the data, not the just-requested page.
+  const shownPage = data?.page ?? page;
 
-  const rows = useMemo(() => {
-    if (!data) return [];
-    const term = q.trim().toLowerCase();
-    return data.filter((e) => {
-      if (app !== ALL && e.application?.slug !== app) return false;
-      if (severity !== ALL && e.severity !== severity) return false;
-      if (eventType !== ALL && e.eventType !== eventType) return false;
-      if (term) {
-        const hay = [e.eventType, e.email, e.userId, e.ipAddress, e.application?.name]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase();
-        if (!hay.includes(term)) return false;
-      }
-      return true;
-    });
-  }, [data, q, app, severity, eventType]);
+  // Clamp if a refetch shrinks the result set below the current page.
+  useEffect(() => {
+    if (data && page > totalPages) setPage(totalPages);
+  }, [data, page, totalPages]);
 
   const hasFilters = q || app !== ALL || severity !== ALL || eventType !== ALL;
 
@@ -105,7 +118,10 @@ export default function EventsPage() {
           value={app}
           onChange={setApp}
           placeholder="All applications"
-          options={apps.map(([slug, name]) => ({ value: slug, label: name }))}
+          options={(facets?.applications ?? []).map((a) => ({
+            value: a.slug,
+            label: a.name,
+          }))}
         />
         <FilterSelect
           value={severity}
@@ -117,7 +133,7 @@ export default function EventsPage() {
           value={eventType}
           onChange={setEventType}
           placeholder="All events"
-          options={eventTypes.map((t) => ({ value: t, label: t }))}
+          options={(facets?.eventTypes ?? []).map((t) => ({ value: t, label: t }))}
         />
         {hasFilters && (
           <Button
@@ -138,9 +154,11 @@ export default function EventsPage() {
       <div className="text-xs text-muted-foreground">
         {isLoading
           ? 'Loading…'
-          : `${rows.length}${
-              data && rows.length !== data.length ? ` of ${data.length}` : ''
-            } event${rows.length === 1 ? '' : 's'}`}
+          : total === 0
+            ? '0 events'
+            : `Showing ${(shownPage - 1) * PAGE_SIZE + 1}–${
+                (shownPage - 1) * PAGE_SIZE + rows.length
+              } of ${total} event${total === 1 ? '' : 's'}`}
       </div>
 
       {isError && (
@@ -176,6 +194,32 @@ export default function EventsPage() {
           </TableBody>
         </Table>
       </Card>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-end gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page <= 1 || isFetching}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+          >
+            <ChevronLeft className="mr-1 h-4 w-4" />
+            Previous
+          </Button>
+          <span className="px-1 text-xs tabular-nums text-muted-foreground">
+            Page {page} of {totalPages}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page >= totalPages || isFetching}
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+          >
+            Next
+            <ChevronRight className="ml-1 h-4 w-4" />
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
